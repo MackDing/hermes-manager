@@ -1,0 +1,17 @@
+apiVersion: hermesmanager.io/v1alpha1
+kind: Skill
+metadata:
+  name: hello-skill
+  version: "0.1.0"
+spec:
+  description: "Demo skill that greets a user."
+  entrypoint: "run.py"
+  parameters:
+    - name: name
+      type: string
+      required: true
+      description: "Name to greet"
+  required_tools:
+    - llm
+  required_models:
+    - demo-model
