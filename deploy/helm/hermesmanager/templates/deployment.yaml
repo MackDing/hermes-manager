@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hermesmanager.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hermesmanager.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "hermesmanager.serviceAccountName" . }}
+      containers:
+        - name: hermesmanager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: HERMESMANAGER_PORT
+              value: "8080"
+            - name: HERMESMANAGER_NAMESPACE
+              value: {{ include "hermesmanager.watchNamespace" . | quote }}
+            - name: HERMESMANAGER_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hermesmanager.fullname" . }}
+                  key: admin-password
+            {{- if .Values.postgres.enabled }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hermesmanager.pgSecretName" . }}
+                  key: uri
+            {{- end }}
+            {{- if .Values.slack.enabled }}
+            - name: HERMESMANAGER_SLACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hermesmanager.fullname" . }}
+                  key: slack-token
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          volumeMounts:
+            - name: skills
+              mountPath: /etc/hermesmanager/skills
+              readOnly: true
+            - name: policy
+              mountPath: /etc/hermesmanager/policy
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: skills
+          configMap:
+            name: {{ include "hermesmanager.fullname" . }}-skills
+        - name: policy
+          configMap:
+            name: {{ include "hermesmanager.fullname" . }}-policy

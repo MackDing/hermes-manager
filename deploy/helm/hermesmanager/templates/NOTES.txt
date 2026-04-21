@@ -1,0 +1,55 @@
+HermesManager has been installed!
+
+=== Access the Web UI ===
+
+  kubectl port-forward svc/{{ include "hermesmanager.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+  Then open: http://localhost:8080
+
+=== Admin Password ===
+
+{{- if .Values.adminPassword }}
+
+  You set an explicit admin password via Helm values.
+
+{{- else }}
+
+  An admin password was auto-generated. Retrieve it with:
+
+  kubectl get secret {{ include "hermesmanager.fullname" . }} -n {{ .Release.Namespace }} \
+    -o jsonpath='{.data.admin-password}' | base64 -d && echo
+
+{{- end }}
+
+=== Health Check ===
+
+  curl http://localhost:8080/healthz
+
+=== Quick Verification ===
+
+  # After port-forwarding, verify the control plane is running:
+  curl -s http://localhost:8080/healthz | head -c 200
+
+  # List loaded skills:
+  curl -s http://localhost:8080/v1/skills | head -c 500
+
+{{- if .Values.postgres.enabled }}
+
+=== PostgreSQL ===
+
+  Bundled PostgreSQL is managed by CloudNativePG.
+  Cluster name: {{ include "hermesmanager.pgClusterName" . }}
+
+  Check status:
+  kubectl get cluster {{ include "hermesmanager.pgClusterName" . }} -n {{ .Release.Namespace }}
+
+{{- end }}
+
+{{- if .Values.slack.enabled }}
+
+=== Slack Bot ===
+
+  Slack integration is enabled. Verify with:
+  /hermes status
+
+{{- end }}

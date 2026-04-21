@@ -1,0 +1,11 @@
+apiVersion: v2
+name: hermesmanager
+version: 0.1.0
+appVersion: "0.1.0"
+description: "K8s-native control plane for Hermes Agent fleets"
+type: application
+home: https://github.com/hermesmanager/hermesmanager
+sources:
+  - https://github.com/hermesmanager/hermesmanager
+maintainers:
+  - name: hermesmanager

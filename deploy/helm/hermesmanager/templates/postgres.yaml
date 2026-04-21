@@ -1,0 +1,39 @@
+{{- if .Values.postgres.enabled }}
+{{- if (.Capabilities.APIVersions.Has "postgresql.cnpg.io/v1") }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "hermesmanager.pgClusterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+  storage:
+    size: {{ .Values.postgres.storage.size }}
+  postgresql:
+    parameters:
+      shared_buffers: "128MB"
+      max_connections: "100"
+  bootstrap:
+    initdb:
+      database: hermesmanager
+      owner: hermesmanager
+{{- else }}
+# -------------------------------------------------------------------
+# CloudNativePG operator CRD (postgresql.cnpg.io/v1) is NOT installed.
+#
+# Install it before deploying this chart with postgres.enabled=true:
+#
+#   kubectl apply --server-side -f \
+#     https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+#
+# Or via Helm:
+#
+#   helm repo add cnpg https://cloudnative-pg.github.io/charts
+#   helm install cnpg cnpg/cloudnative-pg
+#
+# Then re-run: helm upgrade --install hermesmanager <chart-path>
+# -------------------------------------------------------------------
+{{- end }}
+{{- end }}

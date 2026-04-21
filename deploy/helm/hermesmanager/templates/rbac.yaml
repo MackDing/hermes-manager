@@ -1,0 +1,78 @@
+{{- $watchNs := include "hermesmanager.watchNamespace" . -}}
+{{- $isNamespaced := not (empty .Values.watchNamespace) -}}
+{{- if $isNamespaced }}
+# Namespace-scoped RBAC — watchNamespace is set to {{ $watchNs }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  namespace: {{ $watchNs }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  namespace: {{ $watchNs }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "hermesmanager.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hermesmanager.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- else }}
+# Cluster-scoped RBAC — watchNamespace is empty, defaults to release namespace
+# Using ClusterRole so the control plane can manage Jobs across namespaces if needed.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "hermesmanager.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hermesmanager.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

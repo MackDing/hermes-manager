@@ -1,0 +1,65 @@
+# HermesManager Helm Chart Values
+# K8s-native control plane for Hermes Agent fleets
+
+image:
+  repository: ghcr.io/hermesmanager/hermesmanager
+  tag: v0.1.0
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Admin password. If empty, a random password is generated and stored in a Secret.
+# Retrieve it with: kubectl get secret <release>-hermesmanager -o jsonpath='{.data.admin-password}' | base64 -d
+adminPassword: ""
+
+# Bundled PostgreSQL via CloudNativePG operator
+postgres:
+  enabled: true
+  instances: 1
+  storage:
+    size: 1Gi
+
+# Demo agent image used by the K8s runtime for seed tasks
+demoAgent:
+  image: ghcr.io/hermesmanager/demo-agent:v0.1.0
+
+# Slack bot integration
+slack:
+  enabled: false
+  token: ""
+
+# Namespace to watch for agent Jobs. Empty = release namespace.
+watchNamespace: ""
+
+# Seed skill definitions (inline YAML). Mounted as a ConfigMap.
+skills: |
+  apiVersion: hermesmanager.io/v1alpha1
+  kind: Skill
+  metadata:
+    name: hello-skill
+    version: "0.1.0"
+  spec:
+    description: "Demo skill that greets a user."
+    entrypoint: "run.py"
+    parameters:
+      - name: name
+        type: string
+        required: true
+        description: "Name to greet"
+    required_tools:
+      - llm
+    required_models:
+      - demo-model
+
+# Seed policy definitions (inline YAML). Mounted as a ConfigMap.
+policy: |
+  rules:
+    - id: block-gpt4-free-tier
+      action: deny
+      conditions:
+        model: gpt-4
+        team: free-tier
