@@ -63,3 +63,30 @@ policy: |
       conditions:
         model: gpt-4
         team: free-tier
+
+# --- v1.0.0 Production Hardening ---
+
+imagePullSecrets: []
+
+networkPolicy:
+  enabled: true
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: hermesmanager.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+pdb:
+  enabled: true
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70

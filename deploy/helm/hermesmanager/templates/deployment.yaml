@@ -16,10 +16,23 @@ spec:
         {{- include "hermesmanager.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "hermesmanager.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
       containers:
         - name: hermesmanager
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: 8080
@@ -67,6 +80,8 @@ spec:
             - name: policy
               mountPath: /etc/hermesmanager/policy
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 100m
@@ -81,3 +96,5 @@ spec:
         - name: policy
           configMap:
             name: {{ include "hermesmanager.fullname" . }}-policy
+        - name: tmp
+          emptyDir: {}
