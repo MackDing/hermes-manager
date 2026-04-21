@@ -101,11 +101,9 @@ curl http://localhost:8080/v1/events | jq .
 
 ## Web UI
 
-[Dashboard screenshot]
+![Dashboard — Dark Mode (Dracula Gradient)](docs/screenshots/dashboard-dark.png)
 
-[Skills screenshot]
-
-[Events screenshot]
+![Dashboard — Light Mode](docs/screenshots/dashboard-light.png)
 
 ## Configuration
 
