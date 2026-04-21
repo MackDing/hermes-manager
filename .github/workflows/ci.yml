@@ -27,9 +27,11 @@ jobs:
         run: go vet ./...
 
       - name: Go test
-        run: |
-          go test ./internal/... -coverprofile=cover.out -race
-          go test ./cmd/... -race
+        run: go test -race ./...
+
+      - name: Go coverage
+        run: go test -cover ./internal/gateway/... ./internal/policy/... ./internal/runtime/... ./internal/scheduler/...
+        continue-on-error: true
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
