@@ -39,8 +39,19 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("postgres: parse config: %w", err)
 	}
-	config.MaxConns = int32(envInt("PG_MAX_CONNS", 10))
-	config.MinConns = int32(envInt("PG_MIN_CONNS", 2))
+	maxConns := int32(envInt("PG_MAX_CONNS", 10))
+	minConns := int32(envInt("PG_MIN_CONNS", 2))
+	if maxConns < 1 {
+		maxConns = 10
+	}
+	if minConns < 0 {
+		minConns = 2
+	}
+	if minConns > maxConns {
+		minConns = maxConns
+	}
+	config.MaxConns = maxConns
+	config.MinConns = minConns
 	config.MaxConnLifetime = time.Duration(envInt("PG_MAX_CONN_LIFETIME_MINS", 60)) * time.Minute
 	config.HealthCheckPeriod = time.Duration(envInt("PG_HEALTH_CHECK_SECS", 30)) * time.Second
 

@@ -112,7 +112,6 @@ func isTransient(err error) bool {
 		}
 		return false
 	}
-	// Connection-level errors (not pg protocol errors)
-	return errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, context.Canceled)
+	// Connection-level errors (not pg protocol errors) — only deadline, NOT canceled
+	return errors.Is(err, context.DeadlineExceeded)
 }
