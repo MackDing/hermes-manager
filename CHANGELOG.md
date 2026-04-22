@@ -4,6 +4,17 @@ All notable changes to HermesManager are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-04-22
+
+Release pipeline fixes. No runtime code changes.
+
+### Fixed
+- Add root `Dockerfile` (distroless/static-debian12 nonroot) so the release workflow's `docker/build-push-action` can build multi-arch images from pre-built binaries
+- Lowercase the GHCR owner in the Helm OCI push step (`${GITHUB_REPOSITORY_OWNER,,}`) — registry rejected the mixed-case `MackDing` reference
+
+### Note
+- v1.0.0 tag exists on GitHub but was never fully published (container and Helm push failed). v1.0.1 is the first fully-released artifact set. Use v1.0.1 for all installs.
+
 ## [1.0.0] — 2026-04-22
 
 First public release. Production-ready single-admin deployment.
@@ -34,4 +45,5 @@ First public release. Production-ready single-admin deployment.
 - Single-admin auth only — OIDC / SSO planned for v1.1
 - No multi-tenant namespace isolation yet
 
+[1.0.1]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.1
 [1.0.0]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.0

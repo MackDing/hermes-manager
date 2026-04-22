@@ -149,7 +149,8 @@ jobs:
 
       - name: Push Helm chart to OCI
         run: |
-          helm push hermesmanager-*.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          helm push hermesmanager-*.tgz oci://${{ env.REGISTRY }}/${OWNER_LC}
 
   github-release:
     name: Create GitHub Release
