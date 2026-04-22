@@ -1,17 +1,46 @@
+# API version for the HermesManager skill resource.
+# Current supported version: hermesmanager.io/v1alpha1
 apiVersion: hermesmanager.io/v1alpha1
+
+# Resource kind. Must be "Skill" for skill definitions.
 kind: Skill
+
 metadata:
+  # Unique name for this skill. Used in API calls and the web UI.
+  # Must be a DNS-compatible string: lowercase alphanumeric + hyphens.
   name: hello-skill
+
+  # Semantic version of this skill definition.
+  # Follow semver (MAJOR.MINOR.PATCH). Quoted to prevent YAML float parsing.
   version: "0.1.0"
+
 spec:
+  # Human-readable description shown in the web UI and API responses.
   description: "Demo skill that greets a user."
+
+  # Path to the script or binary that runs when this skill is invoked.
+  # Relative to the skill's working directory.
   entrypoint: "run.py"
+
+  # Input parameters accepted by this skill.
+  # These are validated before the skill runs.
   parameters:
+      # Parameter name, used as the JSON key in task submission.
     - name: name
+      # Data type. Supported values: "string", "number", "boolean", "object", "array"
       type: string
+      # Whether this parameter must be provided. Default: false
       required: true
+      # Human-readable description shown in the web UI.
       description: "Name to greet"
+
+  # Tools this skill needs access to at runtime.
+  # The scheduler ensures these are available before dispatching.
+  # Common values: "llm", "web", "code-exec", "filesystem"
   required_tools:
     - llm
+
+  # Model(s) this skill requires. Used for capacity planning and routing.
+  # Must match a model name registered in the HermesManager configuration.
   required_models:
     - demo-model

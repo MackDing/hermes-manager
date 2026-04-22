@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/rs/zerolog/log"
 )
 
 // Bot is the Slack slash-command HTTP handler. It holds a reference to the
@@ -53,12 +54,31 @@ func (b *Bot) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b.handleStatus(w, r)
 	case "run":
 		b.handleRun(w, r, rest)
+	case "help", "":
+		b.handleHelp(w, r)
 	default:
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         fmt.Sprintf("Unknown command %q. Supported: status, run", subCmd),
+			Text: fmt.Sprintf(
+				"Unknown command `%s`. Try `/hermes help` to see all commands.",
+				subCmd,
+			),
 		})
 	}
+}
+
+// handleHelp returns a user-friendly list of supported sub-commands.
+// Also triggered when the user invokes `/hermes` with no arguments.
+func (b *Bot) handleHelp(w http.ResponseWriter, _ *http.Request) {
+	respondJSON(w, slackResponse{
+		ResponseType: "ephemeral",
+		Text: "*HermesManager Slack Commands*\n\n" +
+			"`/hermes status` — Show task counts by state (pending / running / completed / failed / timeout)\n" +
+			"`/hermes run <skill> <json-params>` — Submit a task\n" +
+			"   Example: `/hermes run hello-skill {\"name\":\"World\"}`\n" +
+			"`/hermes help` — Show this message\n\n" +
+			"Docs: <https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md|Quickstart>",
+	})
 }
 
 // handleStatus queries all tasks and returns per-state counts.
@@ -67,9 +87,10 @@ func (b *Bot) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	tasks, err := b.store.ListTasks(ctx, storage.TaskFilter{Limit: 10000})
 	if err != nil {
+		log.Error().Err(err).Msg("slack: failed to list tasks for status command")
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         fmt.Sprintf("Error listing tasks: %v", err),
+			Text:         "Failed to query task status. Check the hermesmanager logs or contact an admin.",
 		})
 		return
 	}
@@ -107,7 +128,7 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 	if skillName == "" {
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         "Usage: run <skill_name> <json_params>",
+			Text:         "Usage: `/hermes run <skill> <json-params>`. Try `/hermes help` for examples.",
 		})
 		return
 	}
@@ -115,16 +136,20 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 	// Validate skill exists.
 	skill, err := b.store.GetSkill(ctx, skillName)
 	if err != nil {
+		log.Error().Err(err).Str("skill", skillName).Msg("slack: failed to look up skill")
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         fmt.Sprintf("Error looking up skill %q: %v", skillName, err),
+			Text:         "Failed to look up skill (runtime error). Check the hermesmanager logs or contact an admin.",
 		})
 		return
 	}
 	if skill == nil {
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         fmt.Sprintf("Unknown skill %q", skillName),
+			Text: fmt.Sprintf(
+				"Skill `%s` not found. Try `/hermes status` for context, or ask an admin to add the skill via Helm values.",
+				skillName,
+			),
 		})
 		return
 	}
@@ -133,9 +158,10 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 	params := map[string]any{}
 	if paramsRaw != "" {
 		if err := json.Unmarshal([]byte(paramsRaw), &params); err != nil {
+			log.Debug().Err(err).Str("skill", skillName).Msg("slack: invalid JSON params")
 			respondJSON(w, slackResponse{
 				ResponseType: "ephemeral",
-				Text:         fmt.Sprintf("Invalid JSON parameters: %v", err),
+				Text:         "Invalid JSON parameters. Example: `/hermes run hello-skill {\"name\":\"World\"}`",
 			})
 			return
 		}
@@ -153,9 +179,10 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 	}
 
 	if err := b.store.CreateTask(ctx, task); err != nil {
+		log.Error().Err(err).Str("skill", skillName).Str("task_id", task.ID).Msg("slack: failed to create task")
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         fmt.Sprintf("Failed to create task: %v", err),
+			Text:         "Failed to submit task (runtime error). Check the hermesmanager logs or contact an admin.",
 		})
 		return
 	}

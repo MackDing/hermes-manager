@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Search, Copy, Check, Monitor, Container, Boxes } from 'lucide-react'
+import { Search, Copy, Check, Monitor, Container, Boxes, BookOpen } from 'lucide-react'
 import { skills } from '../lib/mock-data'
 import type { Skill, Runtime } from '../lib/mock-data'
+import { EmptyState } from '../components/EmptyState'
 
 /* ---------- Runtime icon map ---------- */
 
@@ -258,6 +259,23 @@ export function SkillsPage() {
         Skills
       </h2>
 
+      {skills.length === 0 ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+          <EmptyState
+            icon={<BookOpen size={20} />}
+            title="No skills loaded"
+            message="Skills are mounted via Helm ConfigMaps. See docs/QUICKSTART.md to add one."
+            action={
+              <a
+                href="https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md"
+                className="text-sm font-medium text-[var(--color-accent)] hover:underline"
+              >
+                View Quickstart &rarr;
+              </a>
+            }
+          />
+        </div>
+      ) : (
       <div
         className="flex border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] overflow-hidden"
         style={{ height: 'calc(100vh - 140px)' }}
@@ -345,6 +363,7 @@ export function SkillsPage() {
           <SkillDetail skill={selectedSkill} />
         </div>
       </div>
+      )}
     </div>
   )
 }

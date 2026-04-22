@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, Activity } from 'lucide-react'
 import type { EventType, EventRecord } from '../lib/mock-data'
 import { events, eventTypes, timeRanges } from '../lib/mock-data'
+import { EmptyState } from '../components/EmptyState'
 
 /* ---------- Event type color mapping ---------- */
 
@@ -254,6 +255,16 @@ export function EventsPage() {
         Events
       </h2>
 
+      {events.length === 0 ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)]">
+          <EmptyState
+            icon={<Activity size={20} />}
+            title="No events yet"
+            message="Events stream here in real-time as tasks execute. Submit a task to see activity."
+          />
+        </div>
+      ) : (
+      <>
       <FiltersBar
         taskIdFilter={taskIdFilter}
         onTaskIdChange={handleTaskIdChange}
@@ -340,6 +351,8 @@ export function EventsPage() {
       <div className="mt-3 text-xs text-[var(--color-fg-subtle)] font-[family-name:var(--font-mono)] tabular">
         {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''}
       </div>
+      </>
+      )}
     </div>
   )
 }

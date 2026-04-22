@@ -80,6 +80,7 @@ func (s *mockStore) VerifyAgentToken(_ context.Context, _ string, _ []byte) (boo
 }
 func (s *mockStore) RevokeAgentToken(_ context.Context, _ string) error { return nil }
 func (s *mockStore) Migrate(_ context.Context) error                    { return nil }
+func (s *mockStore) Ping(_ context.Context) error                       { return nil }
 func (s *mockStore) Close() error                                       { return nil }
 
 func newTestTask(rt string) storage.Task {

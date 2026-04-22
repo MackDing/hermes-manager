@@ -68,6 +68,11 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
+// Ping checks database connectivity.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}
+
 // Migrate runs migration SQL from the given directory.
 // For v0.1, only 001_init.up.sql is expected.
 func (s *Store) Migrate(ctx context.Context) error {

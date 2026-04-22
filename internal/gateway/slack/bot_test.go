@@ -95,6 +95,7 @@ func (m *mockStore) RevokeAgentToken(context.Context, string) error {
 	panic("RevokeAgentToken not expected")
 }
 func (m *mockStore) Migrate(context.Context) error { panic("Migrate not expected") }
+func (m *mockStore) Ping(context.Context) error    { return nil }
 func (m *mockStore) Close() error                  { panic("Close not expected") }
 
 // ---------------------------------------------------------------------------
@@ -224,8 +225,11 @@ func TestRunInvalidSkillReturnsError(t *testing.T) {
 	if resp.ResponseType != "ephemeral" {
 		t.Errorf("expected ephemeral response for error, got %q", resp.ResponseType)
 	}
-	if !strings.Contains(resp.Text, "Unknown skill") {
-		t.Errorf("expected unknown skill message, got %q", resp.Text)
+	if !strings.Contains(resp.Text, "not found") {
+		t.Errorf("expected not-found message, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "nonexistent") {
+		t.Errorf("expected skill name in message, got %q", resp.Text)
 	}
 }
 
@@ -247,6 +251,47 @@ func TestRunMalformedParamsReturnsError(t *testing.T) {
 	if !strings.Contains(resp.Text, "Invalid JSON") {
 		t.Errorf("expected invalid JSON message, got %q", resp.Text)
 	}
+	if !strings.Contains(resp.Text, "hello-skill") {
+		t.Errorf("expected example command in message, got %q", resp.Text)
+	}
+}
+
+func TestBotHelp(t *testing.T) {
+	ms := newMockStore()
+	bot := NewBot(ms)
+	rec := postSlashCommand(t, bot, "help")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	resp := decodeSlackResponse(t, rec)
+	if resp.ResponseType != "ephemeral" {
+		t.Errorf("expected ephemeral response for help, got %q", resp.ResponseType)
+	}
+	if !strings.Contains(resp.Text, "HermesManager Slack Commands") {
+		t.Errorf("expected help header in text, got %q", resp.Text)
+	}
+	for _, want := range []string{"/hermes status", "/hermes run", "/hermes help"} {
+		if !strings.Contains(resp.Text, want) {
+			t.Errorf("expected help text to mention %q, got %q", want, resp.Text)
+		}
+	}
+}
+
+func TestBotHelpBareCommand(t *testing.T) {
+	// An empty "text" (user types `/hermes` alone) should route to help.
+	ms := newMockStore()
+	bot := NewBot(ms)
+	rec := postSlashCommand(t, bot, "")
+
+	resp := decodeSlackResponse(t, rec)
+	if resp.ResponseType != "ephemeral" {
+		t.Errorf("expected ephemeral, got %q", resp.ResponseType)
+	}
+	if !strings.Contains(resp.Text, "HermesManager Slack Commands") {
+		t.Errorf("expected help on bare invocation, got %q", resp.Text)
+	}
 }
 
 func TestUnknownSubCommand(t *testing.T) {
@@ -261,6 +306,12 @@ func TestUnknownSubCommand(t *testing.T) {
 	if !strings.Contains(resp.Text, "Unknown command") {
 		t.Errorf("expected unknown command message, got %q", resp.Text)
 	}
+	if !strings.Contains(resp.Text, "/hermes help") {
+		t.Errorf("expected pointer to /hermes help, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "foobar") {
+		t.Errorf("expected echoed subcommand, got %q", resp.Text)
+	}
 }
 
 func TestRunMissingSkillName(t *testing.T) {
@@ -274,6 +325,9 @@ func TestRunMissingSkillName(t *testing.T) {
 	}
 	if !strings.Contains(resp.Text, "Usage") {
 		t.Errorf("expected usage message, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "/hermes help") {
+		t.Errorf("expected pointer to /hermes help, got %q", resp.Text)
 	}
 }
 
@@ -324,8 +378,12 @@ func TestStatusStoreError(t *testing.T) {
 	if resp.ResponseType != "ephemeral" {
 		t.Errorf("expected ephemeral, got %q", resp.ResponseType)
 	}
-	if !strings.Contains(resp.Text, "db connection lost") {
-		t.Errorf("expected error message in text, got %q", resp.Text)
+	// Original error must NOT leak to Slack; only a friendly message should.
+	if strings.Contains(resp.Text, "db connection lost") {
+		t.Errorf("raw error must not leak to user, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "Failed to query task status") {
+		t.Errorf("expected friendly status error, got %q", resp.Text)
 	}
 }
 
@@ -341,8 +399,11 @@ func TestRunCreateTaskError(t *testing.T) {
 	if resp.ResponseType != "ephemeral" {
 		t.Errorf("expected ephemeral, got %q", resp.ResponseType)
 	}
-	if !strings.Contains(resp.Text, "insert failed") {
-		t.Errorf("expected error in text, got %q", resp.Text)
+	if strings.Contains(resp.Text, "insert failed") {
+		t.Errorf("raw error must not leak to user, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "Failed to submit task") {
+		t.Errorf("expected friendly submit error, got %q", resp.Text)
 	}
 }
 
@@ -357,8 +418,11 @@ func TestRunGetSkillError(t *testing.T) {
 	if resp.ResponseType != "ephemeral" {
 		t.Errorf("expected ephemeral, got %q", resp.ResponseType)
 	}
-	if !strings.Contains(resp.Text, "timeout") {
-		t.Errorf("expected error in text, got %q", resp.Text)
+	if strings.Contains(resp.Text, "timeout") {
+		t.Errorf("raw error must not leak to user, got %q", resp.Text)
+	}
+	if !strings.Contains(resp.Text, "Failed to look up skill") {
+		t.Errorf("expected friendly lookup error, got %q", resp.Text)
 	}
 }
 

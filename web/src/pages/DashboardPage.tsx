@@ -9,6 +9,7 @@ import {
   Monitor,
   Container,
   Boxes,
+  Inbox,
 } from 'lucide-react'
 import {
   LineChart,
@@ -23,6 +24,7 @@ import {
 } from 'recharts'
 import type { PieLabelRenderProps } from 'recharts'
 import { StatusBadge } from '../components/StatusBadge'
+import { EmptyState } from '../components/EmptyState'
 import type { StatCard as StatCardType, Runtime } from '../lib/mock-data'
 import {
   statCards,
@@ -253,6 +255,21 @@ export function DashboardPage() {
               ({activeTasks.length})
             </span>
           </div>
+          {activeTasks.length === 0 ? (
+            <EmptyState
+              icon={<Inbox size={20} />}
+              title="No active tasks"
+              message="Tasks appear here once agents start running. See the Quickstart for how to submit one."
+              action={
+                <a
+                  href="https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md"
+                  className="text-sm font-medium text-[var(--color-accent)] hover:underline"
+                >
+                  View Quickstart &rarr;
+                </a>
+              }
+            />
+          ) : (
           <div className="overflow-auto max-h-[320px]">
             <table className="w-full text-sm">
               <caption className="sr-only">
@@ -310,6 +327,7 @@ export function DashboardPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
 
         {/* Donut chart */}

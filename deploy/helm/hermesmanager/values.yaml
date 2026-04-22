@@ -1,41 +1,87 @@
 # HermesManager Helm Chart Values
 # K8s-native control plane for Hermes Agent fleets
+#
+# --- Before deploying to production, review these fields ---
+#   1. adminPassword           — set an explicit password, or let it auto-generate
+#   2. image.repository / tag  — pin to a released version
+#   3. postgres.enabled        — disable if using externalDatabase.dsn
+#   4. externalDatabase.dsn    — set when postgres.enabled is false
+#   5. ingress.enabled         — enable + configure TLS for non-port-forward access
+#   6. networkPolicy.enabled   — keep true unless cluster lacks a NetworkPolicy CNI
+#   7. pdb.enabled / hpa       — tune for real workload and replica count
+#   8. slack.token             — required if slack.enabled
 
+# --- Control plane image ---
 image:
-  repository: ghcr.io/hermesmanager/hermesmanager
-  tag: v0.1.0
+  # Container image repository. Published by the release workflow.
+  # Default: ghcr.io/mackding/hermesmanager
+  repository: ghcr.io/mackding/hermesmanager
+  # Image tag. Should track the Chart appVersion unless pinning a hotfix.
+  # Default: v1.1.0
+  tag: v1.1.0
+  # One of: Always, IfNotPresent, Never. Use IfNotPresent for pinned tags.
   pullPolicy: IfNotPresent
 
+# Number of control plane replicas. Scale only when postgres can handle the load.
+# For HA, set to 2+ and ensure pdb.enabled is true.
 replicaCount: 1
 
+# --- Kubernetes Service ---
 service:
+  # Service type. ClusterIP is recommended; use ingress for external access.
+  # Example: ClusterIP | NodePort | LoadBalancer
   type: ClusterIP
+  # Service port exposed to the cluster. The container always listens on 8080.
   port: 8080
 
 # Admin password. If empty, a random password is generated and stored in a Secret.
 # Retrieve it with: kubectl get secret <release>-hermesmanager -o jsonpath='{.data.admin-password}' | base64 -d
+# Constraint: bcrypt-hashable ASCII. Recommended: 24+ chars.
 adminPassword: ""
 
-# Bundled PostgreSQL via CloudNativePG operator
+# --- Bundled PostgreSQL (via CloudNativePG operator) ---
+# Set enabled: false and fill externalDatabase.dsn to bring your own Postgres.
 postgres:
+  # Deploy a CNPG Cluster alongside the control plane.
   enabled: true
+  # Number of Postgres instances. Use 3 for production HA (requires storage.size >= 10Gi).
   instances: 1
   storage:
+    # PVC size for each Postgres instance. Raise for real workloads.
+    # Example: 1Gi (dev) | 10Gi (small prod) | 100Gi (busy prod)
     size: 1Gi
 
-# Demo agent image used by the K8s runtime for seed tasks
-demoAgent:
-  image: ghcr.io/hermesmanager/demo-agent:v0.1.0
+# --- External database (optional) ---
+# Used only when postgres.enabled is false. Template wiring lands in a later release;
+# for now this section is a placeholder so operators can stage their DSN/secret refs.
+externalDatabase:
+  # Full Postgres DSN. Example:
+  #   postgres://hermes:PASSWORD@db.internal:5432/hermesmanager?sslmode=require
+  dsn: ""
+  # Reference an existing Secret containing the DSN under the given key.
+  # If set, dsn above is ignored.
+  existingSecret: ""
+  existingSecretKey: "dsn"
 
-# Slack bot integration
+# --- Demo agent ---
+# Image pulled by the K8s runtime when seeding the hello-skill example task.
+demoAgent:
+  # Default: ghcr.io/mackding/demo-agent:v1.1.0
+  image: ghcr.io/mackding/demo-agent:v1.1.0
+
+# --- Slack bot integration ---
 slack:
+  # Enable the Slack gateway. Requires token below.
   enabled: false
+  # Slack bot token (xoxb-...). Store in a Secret in real deployments.
   token: ""
 
-# Namespace to watch for agent Jobs. Empty = release namespace.
+# Namespace to watch for agent Jobs when using the k8s runtime.
+# Empty string means the release namespace.
+# Example: "agents" | "" (release namespace)
 watchNamespace: ""
 
-# Seed skill definitions (inline YAML). Mounted as a ConfigMap.
+# Seed skill definitions (inline YAML). Mounted as a ConfigMap and picked up on startup.
 skills: |
   apiVersion: hermesmanager.io/v1alpha1
   kind: Skill
@@ -64,29 +110,43 @@ policy: |
         model: gpt-4
         team: free-tier
 
-# --- v1.0.0 Production Hardening ---
+# --- Production hardening (v1.0.0+) ---
 
+# Image pull secrets for private registries.
+# Example: [{ name: ghcr-pull-secret }]
 imagePullSecrets: []
 
+# NetworkPolicy restricts traffic to/from the control plane pods.
+# Disable only if your cluster's CNI does not support NetworkPolicy (e.g. some dev clusters).
 networkPolicy:
   enabled: true
 
+# --- Ingress ---
+# Off by default. Enable for public or cross-namespace access; pair with TLS.
 ingress:
   enabled: false
+  # IngressClass name. Common: nginx | traefik | alb
   className: nginx
+  # Add ingress controller annotations here (e.g. cert-manager, rate limits).
   annotations: {}
   hosts:
     - host: hermesmanager.local
       paths:
         - path: /
           pathType: Prefix
+  # Example TLS block:
+  #   - secretName: hermesmanager-tls
+  #     hosts: [hermesmanager.example.com]
   tls: []
 
+# PodDisruptionBudget. Keep enabled when replicaCount >= 2.
 pdb:
   enabled: true
 
+# HorizontalPodAutoscaler. Requires metrics-server.
 hpa:
   enabled: false
   minReplicas: 1
   maxReplicas: 3
+  # CPU utilization % across pods that triggers scale-up.
   targetCPUUtilizationPercentage: 70

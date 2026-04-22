@@ -34,6 +34,7 @@ type Store interface {
 	RevokeAgentToken(ctx context.Context, taskID string) error
 
 	// Lifecycle
+	Ping(ctx context.Context) error
 	Migrate(ctx context.Context) error
 	Close() error
 }

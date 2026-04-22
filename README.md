@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MackDing/HermesManager/releases/tag/v1.0.2"><img src="https://img.shields.io/badge/release-v1.0.2-bd93f9?style=flat-square" alt="v1.0.2"/></a>
+  <a href="https://github.com/MackDing/HermesManager/releases/tag/v1.1.0"><img src="https://img.shields.io/badge/release-v1.1.0-bd93f9?style=flat-square" alt="v1.1.0"/></a>
   <a href="https://github.com/MackDing/HermesManager/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MackDing/HermesManager/ci.yml?branch=main&style=flat-square&color=50fa7b" alt="CI"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ff79c6?style=flat-square" alt="MIT"/></a>
   <img src="https://img.shields.io/badge/go-1.24-8be9fd?style=flat-square" alt="Go 1.24"/>
@@ -19,7 +19,7 @@
 ---
 
 ```bash
-helm install hermesmanager oci://ghcr.io/mackding/charts/hermesmanager --version 1.0.2
+helm install hermesmanager oci://ghcr.io/mackding/charts/hermesmanager --version 1.1.0
 ```
 
 > **Note:** v1.0 ships with single-admin auth. Intended for dev clusters and internal teams, not public-facing production without a reverse proxy. OIDC/SSO is planned for v1.1.
@@ -78,7 +78,7 @@ Each runtime driver computes its own callback URL so agents always know how to r
 ### Install
 
 ```bash
-helm install hermesmanager oci://ghcr.io/hermesmanager/hermesmanager --version 0.1.0
+helm install hermesmanager oci://ghcr.io/mackding/charts/hermesmanager --version 1.1.0
 ```
 
 On a warm-cache cluster (images pre-pulled), the control plane is ready in under 5 minutes. Cold-start (first image pull) takes 8-10 minutes; use `kind load docker-image` to pre-populate.
@@ -93,8 +93,8 @@ open http://localhost:8080
 The admin password is printed in Helm's `NOTES.txt` output. If you set it explicitly:
 
 ```bash
-helm install hermesmanager oci://ghcr.io/hermesmanager/hermesmanager \
-  --set adminPassword=changeme
+helm install hermesmanager oci://ghcr.io/mackding/charts/hermesmanager \
+  --set adminPassword=changeme --version 1.1.0
 ```
 
 ### Submit a Task
@@ -127,8 +127,8 @@ Key Helm values:
 
 | Value | Default | Description |
 |-------|---------|-------------|
-| `image.repository` | `ghcr.io/hermesmanager/hermesmanager` | Control plane container image |
-| `image.tag` | `v0.1.0` | Image tag |
+| `image.repository` | `ghcr.io/mackding/hermesmanager` | Control plane container image |
+| `image.tag` | `v1.1.0` | Image tag |
 | `postgres.enabled` | `true` | Deploy PostgreSQL via CloudNativePG |
 | `postgres.dsn` | (generated) | Connection string (set to use external Postgres) |
 | `slack.enabled` | `false` | Enable the Slack bot gateway |

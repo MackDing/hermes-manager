@@ -1,6 +1,20 @@
+# Policy rules control which tasks are allowed or denied.
+# Each rule is evaluated in order; the first matching rule wins.
+# See docs/AGENT_API.md for the full policy specification.
 rules:
+    # Unique identifier for this rule (used in logs and audit trails).
+    # Must be a DNS-compatible string: lowercase alphanumeric + hyphens.
   - id: block-gpt4-free-tier
+
+    # Action to take when all conditions match.
+    # Supported values: "allow", "deny"
     action: deny
+
+    # Conditions that must ALL be true for this rule to match.
+    # Each key corresponds to a field on the incoming task request.
     conditions:
+      # Model name to match against. Exact string match.
       model: gpt-4
+
+      # Team or tenant identifier. Exact string match.
       team: free-tier

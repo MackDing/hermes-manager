@@ -177,3 +177,4 @@ jobs:
             hermesmanager-linux-amd64
             hermesmanager-linux-arm64
             checksums.txt
+            scripts/install.sh

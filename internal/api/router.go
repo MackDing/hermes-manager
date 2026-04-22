@@ -32,6 +32,7 @@ func NewServer(store storage.Store, sched *scheduler.Scheduler, pol *policy.Engi
 func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("GET /readyz", handleReadyzStub)
 
 	// Stubs for when no Server is configured
 	mux.HandleFunc("GET /v1/skills", stub("GET /v1/skills"))
@@ -53,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("GET /readyz", s.handleReadyz)
 
 	// Skills
 	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
@@ -86,10 +88,6 @@ func mountSPA(mux *http.ServeMux) {
 	})
 }
 
-func handleHealthz(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-}
 
 // --- Skills ---
 

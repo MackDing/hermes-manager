@@ -4,6 +4,42 @@ All notable changes to HermesManager are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-04-22
+
+Usability polish release. No breaking API changes.
+
+### Added
+- **CLI flags** — `hermesmanager --version` and `--help` now work; help prints all env vars with examples
+- **`/readyz` endpoint** — readiness probe pings Postgres; returns 503 if database is unreachable. Liveness (`/healthz`) remains process-only. Helm deployment probes now split correctly
+- **`/hermes help`** Slack command — lists all commands with examples; bare `/hermes` also shows help
+- **Makefile** — `make build`, `make test`, `make lint`, `make dev` (starts Postgres + backend), `make helm-lint`
+- **`docker-compose.yml`** — Postgres 16-alpine for local development with healthcheck
+- **`docs/QUICKSTART.md`** — 5-step copy-paste guide from `helm install` to first task submission
+- **`docs/TROUBLESHOOTING.md`** — 7 common errors with symptom/cause/fix
+- **GitHub templates** — bug report, feature request, and PR templates
+- **`scripts/install.sh`** — one-liner binary installer (resolves latest release, detects OS/arch)
+- **React `EmptyState` component** — shared empty-state UI for all pages (activates when API returns empty data)
+- **React `ErrorBoundary`** — catches render crashes with "Try again" recovery
+
+### Improved
+- **Startup error messages** — all `log.Fatal` calls include a `hint` field with actionable fix guidance
+- **Startup log** — now includes `version` field for quick identification in container logs
+- **Slack error messages** — raw errors no longer leak to users; friendly messages with next-step guidance instead
+- **`values.yaml`** — every field annotated with purpose, default, constraints, and examples
+- **`NOTES.txt`** — now guides users to wait for Postgres readiness before port-forwarding
+- **`deploy/examples/`** — policy.yaml and hello-skill.yaml fully commented
+- **Chart.yaml** — added keywords, annotations, and Artifact Hub metadata
+
+### Fixed
+- **Version consistency** — `values.yaml` image tag, README helm commands, and Chart version all aligned to 1.1.0 (was a mix of 0.1.0, 1.0.0, 1.0.2)
+- **Image repository** — corrected from `ghcr.io/hermesmanager/hermesmanager` to `ghcr.io/mackding/hermesmanager` throughout
+- **K8s readiness probe** — `readinessProbe` now targets `/readyz` with `initialDelaySeconds: 10` and `failureThreshold: 6` (30s window for Postgres cold-start)
+
+### Known Limitations
+- Single-admin auth only — OIDC/SSO planned for v1.2
+- SPA uses mock data — real API integration planned for v1.2
+- No multi-tenant namespace isolation yet
+
 ## [1.0.2] — 2026-04-22
 
 Helm chart distribution path fix. No runtime code changes.
@@ -59,6 +95,7 @@ First public release. Production-ready single-admin deployment.
 - Single-admin auth only — OIDC / SSO planned for v1.1
 - No multi-tenant namespace isolation yet
 
+[1.1.0]: https://github.com/MackDing/HermesManager/releases/tag/v1.1.0
 [1.0.2]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.2
 [1.0.1]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.1
 [1.0.0]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.0

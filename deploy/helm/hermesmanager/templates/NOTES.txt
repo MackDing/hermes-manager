@@ -1,5 +1,19 @@
 HermesManager has been installed!
 
+=== Wait for the control plane (30-60s on first install) ===
+{{- if .Values.postgres.enabled }}
+
+  # Wait for PostgreSQL
+  kubectl wait --for=condition=Ready pod \
+    -l cnpg.io/cluster={{ include "hermesmanager.pgClusterName" . }} \
+    -n {{ .Release.Namespace }} --timeout=5m
+{{- end }}
+
+  # Wait for hermesmanager
+  kubectl wait --for=condition=Ready pod \
+    -l app.kubernetes.io/name=hermesmanager \
+    -n {{ .Release.Namespace }} --timeout=5m
+
 === Access the Web UI ===
 
   kubectl port-forward svc/{{ include "hermesmanager.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
@@ -23,12 +37,12 @@ HermesManager has been installed!
 
 === Health Check ===
 
-  curl http://localhost:8080/healthz
+  curl http://localhost:8080/readyz
 
 === Quick Verification ===
 
-  # After port-forwarding, verify the control plane is running:
-  curl -s http://localhost:8080/healthz | head -c 200
+  # After port-forwarding, verify the control plane is ready:
+  curl -s http://localhost:8080/readyz | head -c 200
 
   # List loaded skills:
   curl -s http://localhost:8080/v1/skills | head -c 500
@@ -53,3 +67,8 @@ HermesManager has been installed!
   /hermes status
 
 {{- end }}
+
+=== Learn more ===
+
+  Quickstart: https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md
+  Troubleshooting: https://github.com/MackDing/HermesManager/blob/main/docs/TROUBLESHOOTING.md
