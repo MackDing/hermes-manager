@@ -14,8 +14,8 @@
 # --- Control plane image ---
 image:
   # Container image repository. Published by the release workflow.
-  # Default: ghcr.io/mackding/hermesmanager
-  repository: ghcr.io/mackding/hermesmanager
+  # Default: ghcr.io/mackding/hermes-manager
+  repository: ghcr.io/mackding/hermes-manager
   # Image tag. Should track the Chart appVersion unless pinning a hotfix.
   # Default: v1.1.0
   tag: v1.1.0

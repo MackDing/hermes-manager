@@ -16,7 +16,7 @@
 ### Clone and Build
 
 ```bash
-git clone https://github.com/hermesmanager/hermesmanager.git
+git clone https://github.com/MackDing/hermes-manager.git
 cd hermesmanager
 go mod download
 go build ./cmd/hermesmanager/
@@ -108,7 +108,7 @@ docker build -t hermesmanager:dev .
 ```bash
 kind create cluster --name hermesmanager-dev
 kind load docker-image hermesmanager:dev --name hermesmanager-dev
-helm install hermesmanager deploy/helm/hermesmanager/ --set image.tag=dev
+helm install hermesmanager deploy/helm/hermes-manager/ --set image.tag=dev
 ```
 
 ## How to Add a New Runtime Driver
@@ -126,8 +126,8 @@ package yourdriver
 
 import (
     "context"
-    "github.com/hermesmanager/hermesmanager/internal/runtime"
-    "github.com/hermesmanager/hermesmanager/internal/storage"
+    "github.com/MackDing/hermes-manager/internal/runtime"
+    "github.com/MackDing/hermes-manager/internal/storage"
 )
 
 type Driver struct {
@@ -166,7 +166,7 @@ func init() {
 4. Import the package in `cmd/hermesmanager/main.go` (blank import):
 
 ```go
-import _ "github.com/hermesmanager/hermesmanager/internal/runtime/yourdriver"
+import _ "github.com/MackDing/hermes-manager/internal/runtime/yourdriver"
 ```
 
 5. Write tests. At minimum, unit tests with a mock workload. See `internal/runtime/local/local_test.go` for the pattern.

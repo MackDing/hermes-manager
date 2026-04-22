@@ -32,7 +32,7 @@ Usability polish release. No breaking API changes.
 
 ### Fixed
 - **Version consistency** — `values.yaml` image tag, README helm commands, and Chart version all aligned to 1.1.0 (was a mix of 0.1.0, 1.0.0, 1.0.2)
-- **Image repository** — corrected from `ghcr.io/hermesmanager/hermesmanager` to `ghcr.io/mackding/hermesmanager` throughout
+- **Image repository** — corrected from `ghcr.io/hermesmanager/hermesmanager` to `ghcr.io/mackding/hermes-manager` throughout
 - **K8s readiness probe** — `readinessProbe` now targets `/readyz` with `initialDelaySeconds: 10` and `failureThreshold: 6` (30s window for Postgres cold-start)
 
 ### Known Limitations
@@ -45,13 +45,13 @@ Usability polish release. No breaking API changes.
 Helm chart distribution path fix. No runtime code changes.
 
 ### Fixed
-- **Helm chart OCI path collision** — v1.0.1 pushed both the container image and the Helm chart to `ghcr.io/mackding/hermesmanager`, causing the container manifest to overwrite the chart at the same tag. `helm pull` returned `could not load config with mediatype application/vnd.cncf.helm.config.v1+json`.
+- **Helm chart OCI path collision** — v1.0.1 pushed both the container image and the Helm chart to `ghcr.io/mackding/hermes-manager`, causing the container manifest to overwrite the chart at the same tag. `helm pull` returned `could not load config with mediatype application/vnd.cncf.helm.config.v1+json`.
 - Helm chart now publishes to `oci://ghcr.io/mackding/charts/hermesmanager` (separate namespace from the container image).
 
 ### Migration
-- Container image stays at `ghcr.io/mackding/hermesmanager:1.0.2` (unchanged).
+- Container image stays at `ghcr.io/mackding/hermes-manager:1.0.2` (unchanged).
 - Helm install command changes:
-  - **Before**: `helm install hermesmanager oci://ghcr.io/mackding/hermesmanager --version 1.0.1`
+  - **Before**: `helm install hermesmanager oci://ghcr.io/mackding/hermes-manager --version 1.0.1`
   - **After**:  `helm install hermesmanager oci://ghcr.io/mackding/charts/hermesmanager --version 1.0.2`
 
 ## [1.0.1] — 2026-04-22
@@ -95,7 +95,7 @@ First public release. Production-ready single-admin deployment.
 - Single-admin auth only — OIDC / SSO planned for v1.1
 - No multi-tenant namespace isolation yet
 
-[1.1.0]: https://github.com/MackDing/HermesManager/releases/tag/v1.1.0
-[1.0.2]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.2
-[1.0.1]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.1
-[1.0.0]: https://github.com/MackDing/HermesManager/releases/tag/v1.0.0
+[1.1.0]: https://github.com/MackDing/hermes-manager/releases/tag/v1.1.0
+[1.0.2]: https://github.com/MackDing/hermes-manager/releases/tag/v1.0.2
+[1.0.1]: https://github.com/MackDing/hermes-manager/releases/tag/v1.0.1
+[1.0.0]: https://github.com/MackDing/hermes-manager/releases/tag/v1.0.0

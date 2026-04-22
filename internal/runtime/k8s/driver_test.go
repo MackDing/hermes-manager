@@ -9,8 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"github.com/hermesmanager/hermesmanager/internal/runtime"
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/runtime"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 func newTestDriver(t *testing.T, opts ...Option) (*Driver, *fake.Clientset) {

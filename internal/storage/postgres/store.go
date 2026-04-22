@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 // MigrationSQL contains the 001_init.up.sql content.

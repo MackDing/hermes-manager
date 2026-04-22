@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 // ---------------------------------------------------------------------------

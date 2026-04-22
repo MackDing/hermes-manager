@@ -1,4 +1,4 @@
-module github.com/hermesmanager/hermesmanager
+module github.com/MackDing/hermes-manager
 
 go 1.26.2
 

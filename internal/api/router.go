@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hermesmanager/hermesmanager/internal/policy"
-	"github.com/hermesmanager/hermesmanager/internal/scheduler"
-	"github.com/hermesmanager/hermesmanager/internal/storage"
-	"github.com/hermesmanager/hermesmanager/web"
+	"github.com/MackDing/hermes-manager/internal/policy"
+	"github.com/MackDing/hermes-manager/internal/scheduler"
+	"github.com/MackDing/hermes-manager/internal/storage"
+	"github.com/MackDing/hermes-manager/web"
 )
 
 // Server holds dependencies for all API handlers.

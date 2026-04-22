@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/storage"
 	"github.com/rs/zerolog/log"
 )
 
@@ -77,7 +77,7 @@ func (b *Bot) handleHelp(w http.ResponseWriter, _ *http.Request) {
 			"`/hermes run <skill> <json-params>` — Submit a task\n" +
 			"   Example: `/hermes run hello-skill {\"name\":\"World\"}`\n" +
 			"`/hermes help` — Show this message\n\n" +
-			"Docs: <https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md|Quickstart>",
+			"Docs: <https://github.com/MackDing/hermes-manager/blob/main/docs/QUICKSTART.md|Quickstart>",
 	})
 }
 

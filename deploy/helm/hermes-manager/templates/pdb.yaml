@@ -1,0 +1,14 @@
+{{- if and .Values.pdb.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "hermesmanager.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hermesmanager.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "hermesmanager.selectorLabels" . | nindent 6 }}
+{{- end }}

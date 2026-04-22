@@ -10,8 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/hermesmanager/hermesmanager/internal/runtime"
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/runtime"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 // Scheduler dispatches tasks to runtime backends and updates task state via Store.

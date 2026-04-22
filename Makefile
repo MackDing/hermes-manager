@@ -35,7 +35,7 @@ docker-image: ## Build local Docker image
 	docker build -t hermesmanager:dev .
 
 helm-lint: ## Lint Helm chart
-	helm lint deploy/helm/hermesmanager
+	helm lint deploy/helm/hermes-manager
 
 clean: ## Remove build artifacts
 	rm -rf hermesmanager build/ web/dist/

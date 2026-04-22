@@ -19,8 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/hermesmanager/hermesmanager/internal/runtime"
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/runtime"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 const (

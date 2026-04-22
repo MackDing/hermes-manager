@@ -9,5 +9,5 @@ Brief description of what this PR does.
 ## Test plan
 
 - [ ] `go test ./... -race` passes
-- [ ] `helm lint deploy/helm/hermesmanager` passes
+- [ ] `helm lint deploy/helm/hermes-manager` passes
 - [ ] Manual verification:

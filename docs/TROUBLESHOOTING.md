@@ -240,4 +240,4 @@ kubectl logs -l app.kubernetes.io/name=hermesmanager -n hermesmanager --previous
 | `secret not found` | Ensure all required secrets exist in the namespace |
 
 3. If the error is not in this list, open an issue with the full log output:
-   [github.com/MackDing/HermesManager/issues](https://github.com/MackDing/HermesManager/issues)
+   [github.com/MackDing/hermes-manager/issues](https://github.com/MackDing/hermes-manager/issues)

@@ -17,8 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/hermesmanager/hermesmanager/internal/runtime"
-	"github.com/hermesmanager/hermesmanager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/runtime"
+	"github.com/MackDing/hermes-manager/internal/storage"
 )
 
 const (

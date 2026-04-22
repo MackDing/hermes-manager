@@ -2,13 +2,13 @@
 #
 # One-liner install for HermesManager binary.
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/MackDing/HermesManager/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/MackDing/hermes-manager/main/scripts/install.sh | bash
 #   VERSION=v1.1.0 bash install.sh
 #
 set -euo pipefail
 
 VERSION="${VERSION:-latest}"
-GITHUB_REPO="MackDing/HermesManager"
+GITHUB_REPO="MackDing/hermes-manager"
 
 # Resolve "latest" to actual tag
 if [ "$VERSION" = "latest" ]; then

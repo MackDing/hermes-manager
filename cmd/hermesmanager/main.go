@@ -13,16 +13,16 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/hermesmanager/hermesmanager/internal/api"
-	"github.com/hermesmanager/hermesmanager/internal/policy"
-	"github.com/hermesmanager/hermesmanager/internal/runtime"
-	"github.com/hermesmanager/hermesmanager/internal/scheduler"
-	"github.com/hermesmanager/hermesmanager/internal/storage/postgres"
+	"github.com/MackDing/hermes-manager/internal/api"
+	"github.com/MackDing/hermes-manager/internal/policy"
+	"github.com/MackDing/hermes-manager/internal/runtime"
+	"github.com/MackDing/hermes-manager/internal/scheduler"
+	"github.com/MackDing/hermes-manager/internal/storage/postgres"
 
 	// Register runtime drivers via init()
-	_ "github.com/hermesmanager/hermesmanager/internal/runtime/docker"
-	_ "github.com/hermesmanager/hermesmanager/internal/runtime/k8s"
-	_ "github.com/hermesmanager/hermesmanager/internal/runtime/local"
+	_ "github.com/MackDing/hermes-manager/internal/runtime/docker"
+	_ "github.com/MackDing/hermes-manager/internal/runtime/k8s"
+	_ "github.com/MackDing/hermes-manager/internal/runtime/local"
 )
 
 var version = "dev"
@@ -98,7 +98,7 @@ func main() {
 		handler = srv.Handler()
 	} else {
 		log.Warn().Msg("DATABASE_URL not set, running with stub handlers (dev mode)")
-		log.Info().Msg("To run in production, set DATABASE_URL. See: https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md")
+		log.Info().Msg("To run in production, set DATABASE_URL. See: https://github.com/MackDing/hermes-manager/blob/main/docs/QUICKSTART.md")
 		handler = api.NewRouter()
 	}
 
@@ -151,8 +151,8 @@ Environment variables:
 
   LOG_LEVEL                 trace|debug|info|warn|error (default: info)
 
-Docs:     https://github.com/MackDing/HermesManager
-Quickstart: https://github.com/MackDing/HermesManager/blob/main/docs/QUICKSTART.md
+Docs:     https://github.com/MackDing/hermes-manager
+Quickstart: https://github.com/MackDing/hermes-manager/blob/main/docs/QUICKSTART.md
 `, version)
 }
 

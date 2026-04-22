@@ -140,17 +140,17 @@ jobs:
       - name: Update Chart.yaml appVersion
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" deploy/helm/hermesmanager/Chart.yaml
-          sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/hermesmanager/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" deploy/helm/hermes-manager/Chart.yaml
+          sed -i "s/^version:.*/version: ${VERSION}/" deploy/helm/hermes-manager/Chart.yaml
 
       - name: Package Helm chart
         run: |
-          helm package deploy/helm/hermesmanager
+          helm package deploy/helm/hermes-manager
 
       - name: Push Helm chart to OCI
         run: |
           OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
-          helm push hermesmanager-*.tgz oci://${{ env.REGISTRY }}/${OWNER_LC}/charts
+          helm push hermes-manager-*.tgz oci://${{ env.REGISTRY }}/${OWNER_LC}/charts
 
   github-release:
     name: Create GitHub Release

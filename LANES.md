@@ -31,7 +31,7 @@ in their owned directories. Violations will cause merge conflicts.
 
 - `go.mod` / `go.sum`: Every lane may add dependencies. Orchestrator runs `go mod tidy` after each merge.
 - `internal/api/router.go`: Lanes may ADD route handlers but must not rename existing routes or change the mux setup.
-- `deploy/helm/hermesmanager/values.yaml`: Only L7 writes. Other lanes create `HELM_VALUES_REQUEST.md` in their worktree root.
+- `deploy/helm/hermes-manager/values.yaml`: Only L7 writes. Other lanes create `HELM_VALUES_REQUEST.md` in their worktree root.
 
 ## Interface change protocol
 
