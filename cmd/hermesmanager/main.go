@@ -17,6 +17,7 @@ import (
 	"github.com/MackDing/hermes-manager/internal/policy"
 	"github.com/MackDing/hermes-manager/internal/runtime"
 	"github.com/MackDing/hermes-manager/internal/scheduler"
+	"github.com/MackDing/hermes-manager/internal/skills"
 	"github.com/MackDing/hermes-manager/internal/storage/postgres"
 
 	// Register runtime drivers via init()
@@ -72,6 +73,16 @@ func main() {
 			log.Fatal().Err(err).Str("hint", "check DB user has CREATE TABLE permissions; see docs/TROUBLESHOOTING.md").Msg("migration failed")
 		}
 		log.Info().Msg("postgres connected, migrations applied")
+
+		// --- Seed skills from filesystem ---
+		skillsDir := envOr("HERMESMANAGER_SKILLS_DIR", "/etc/hermesmanager/skills")
+		if _, err := os.Stat(skillsDir); err == nil {
+			n, err := skills.LoadFromDir(ctx, store, skillsDir)
+			if err != nil {
+				log.Warn().Err(err).Str("dir", skillsDir).Msg("skill loading had errors")
+			}
+			log.Info().Int("count", n).Str("dir", skillsDir).Msg("skills loaded from filesystem")
+		}
 
 		// --- Policy engine ---
 		var pol *policy.Engine
@@ -148,6 +159,10 @@ Environment variables:
 
   HERMESMANAGER_POLICY_FILE Path to a YAML policy file with deny/allow rules
                             See deploy/examples/policy.yaml for reference.
+
+  HERMESMANAGER_SKILLS_DIR  Directory containing skill YAML files to seed on startup
+                            (default: /etc/hermesmanager/skills)
+                            Helm chart mounts the skills ConfigMap here automatically.
 
   LOG_LEVEL                 trace|debug|info|warn|error (default: info)
 

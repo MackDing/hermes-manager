@@ -19,28 +19,20 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Mock Store — implements storage.Store; only the three methods Bot uses are
-// real. Every other method panics so tests fail loudly if Bot ever touches
+// Mock Store — only methods actually used by Bot (ListTasks for status).
+// Every other method panics so tests fail loudly if Bot ever touches
 // an unexpected dependency.
 // ---------------------------------------------------------------------------
 
 type mockStore struct {
-	tasks  []storage.Task
-	skills map[string]*storage.Skill
-
-	// createdTasks collects tasks passed to CreateTask for assertion.
-	createdTasks []storage.Task
+	tasks []storage.Task
 
 	// Error injection.
-	listTasksErr  error
-	getSkillErr   error
-	createTaskErr error
+	listTasksErr error
 }
 
 func newMockStore() *mockStore {
-	return &mockStore{
-		skills: make(map[string]*storage.Skill),
-	}
+	return &mockStore{}
 }
 
 func (m *mockStore) ListTasks(_ context.Context, _ storage.TaskFilter) ([]storage.Task, error) {
@@ -50,32 +42,19 @@ func (m *mockStore) ListTasks(_ context.Context, _ storage.TaskFilter) ([]storag
 	return m.tasks, nil
 }
 
-func (m *mockStore) GetSkill(_ context.Context, name string) (*storage.Skill, error) {
-	if m.getSkillErr != nil {
-		return nil, m.getSkillErr
-	}
-	s, ok := m.skills[name]
-	if !ok {
-		return nil, nil
-	}
-	return s, nil
-}
-
-func (m *mockStore) CreateTask(_ context.Context, t storage.Task) error {
-	if m.createTaskErr != nil {
-		return m.createTaskErr
-	}
-	m.createdTasks = append(m.createdTasks, t)
-	return nil
-}
-
 // --- Unimplemented methods (panic on call) ---
 
 func (m *mockStore) UpsertSkill(context.Context, storage.Skill) error {
 	panic("UpsertSkill not expected")
 }
+func (m *mockStore) GetSkill(context.Context, string) (*storage.Skill, error) {
+	panic("GetSkill not expected")
+}
 func (m *mockStore) ListSkills(context.Context) ([]storage.Skill, error) {
 	panic("ListSkills not expected")
+}
+func (m *mockStore) CreateTask(context.Context, storage.Task) error {
+	panic("CreateTask not expected")
 }
 func (m *mockStore) GetTask(context.Context, string) (*storage.Task, error) {
 	panic("GetTask not expected")
@@ -101,6 +80,33 @@ func (m *mockStore) RevokeAgentToken(context.Context, string) error {
 func (m *mockStore) Migrate(context.Context) error { panic("Migrate not expected") }
 func (m *mockStore) Ping(context.Context) error    { return nil }
 func (m *mockStore) Close() error                  { panic("Close not expected") }
+
+// ---------------------------------------------------------------------------
+// Mock TaskCreator — satisfies the TaskCreator interface for run tests.
+// ---------------------------------------------------------------------------
+
+type mockTaskCreator struct {
+	// result to return on success.
+	taskID string
+	token  string
+
+	// captured input for assertions.
+	lastInput *TaskCreateInput
+
+	// Error injection.
+	createErr error
+}
+
+func (m *mockTaskCreator) CreateTask(_ context.Context, req TaskCreateInput) (*TaskCreateOutput, error) {
+	m.lastInput = &req
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	return &TaskCreateOutput{
+		TaskID: m.taskID,
+		Token:  m.token,
+	}, nil
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,7 +153,7 @@ func TestStatusReturnsTaskCounts(t *testing.T) {
 		{ID: "t7", State: storage.TaskStateFailed},
 	}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "status")
 
 	if rec.Code != http.StatusOK {
@@ -177,12 +183,9 @@ func TestStatusReturnsTaskCounts(t *testing.T) {
 
 func TestRunCreatesTask(t *testing.T) {
 	ms := newMockStore()
-	ms.skills["deploy"] = &storage.Skill{
-		Name:    "deploy",
-		Version: "1.0",
-	}
+	mc := &mockTaskCreator{taskID: "task-42", token: "tok-abc"}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, `run deploy {"env":"staging"}`)
 
 	if rec.Code != http.StatusOK {
@@ -197,28 +200,33 @@ func TestRunCreatesTask(t *testing.T) {
 	if !strings.Contains(resp.Text, "deploy") {
 		t.Errorf("response should mention skill name, got %q", resp.Text)
 	}
+	if !strings.Contains(resp.Text, "task-42") {
+		t.Errorf("response should mention task ID, got %q", resp.Text)
+	}
 
-	// Verify store received the task.
-	if len(ms.createdTasks) != 1 {
-		t.Fatalf("expected 1 created task, got %d", len(ms.createdTasks))
+	// Verify TaskCreator received the correct input.
+	if mc.lastInput == nil {
+		t.Fatal("expected TaskCreator to be called")
 	}
-	created := ms.createdTasks[0]
-	if created.SkillName != "deploy" {
-		t.Errorf("expected skill_name deploy, got %q", created.SkillName)
+	if mc.lastInput.SkillName != "deploy" {
+		t.Errorf("expected skill_name deploy, got %q", mc.lastInput.SkillName)
 	}
-	if created.State != storage.TaskStatePending {
-		t.Errorf("expected pending state, got %q", created.State)
+	if mc.lastInput.Parameters["env"] != "staging" {
+		t.Errorf("expected env=staging, got %v", mc.lastInput.Parameters)
 	}
-	if created.Parameters["env"] != "staging" {
-		t.Errorf("expected env=staging, got %v", created.Parameters)
+	if mc.lastInput.Runtime != "local" {
+		t.Errorf("expected runtime local, got %q", mc.lastInput.Runtime)
+	}
+	if mc.lastInput.User != "slack-user" {
+		t.Errorf("expected user slack-user, got %q", mc.lastInput.User)
 	}
 }
 
 func TestRunInvalidSkillReturnsError(t *testing.T) {
 	ms := newMockStore()
-	// No skills registered — any skill name is invalid.
+	mc := &mockTaskCreator{createErr: fmt.Errorf("skill %q not found", "nonexistent")}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, "run nonexistent {}")
 
 	if rec.Code != http.StatusOK {
@@ -229,19 +237,20 @@ func TestRunInvalidSkillReturnsError(t *testing.T) {
 	if resp.ResponseType != "ephemeral" {
 		t.Errorf("expected ephemeral response for error, got %q", resp.ResponseType)
 	}
-	if !strings.Contains(resp.Text, "not found") {
-		t.Errorf("expected not-found message, got %q", resp.Text)
+	// Internal error details must NOT leak to Slack.
+	if strings.Contains(resp.Text, "nonexistent") {
+		t.Errorf("raw error must not leak skill name, got %q", resp.Text)
 	}
-	if !strings.Contains(resp.Text, "nonexistent") {
-		t.Errorf("expected skill name in message, got %q", resp.Text)
+	if !strings.Contains(resp.Text, "Failed to submit task") {
+		t.Errorf("expected friendly error message, got %q", resp.Text)
 	}
 }
 
 func TestRunMalformedParamsReturnsError(t *testing.T) {
 	ms := newMockStore()
-	ms.skills["deploy"] = &storage.Skill{Name: "deploy"}
+	mc := &mockTaskCreator{taskID: "task-99"}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, "run deploy {not-valid-json}")
 
 	if rec.Code != http.StatusOK {
@@ -262,7 +271,7 @@ func TestRunMalformedParamsReturnsError(t *testing.T) {
 
 func TestBotHelp(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "help")
 
 	if rec.Code != http.StatusOK {
@@ -286,7 +295,7 @@ func TestBotHelp(t *testing.T) {
 func TestBotHelpBareCommand(t *testing.T) {
 	// An empty "text" (user types `/hermes` alone) should route to help.
 	ms := newMockStore()
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "")
 
 	resp := decodeSlackResponse(t, rec)
@@ -300,7 +309,7 @@ func TestBotHelpBareCommand(t *testing.T) {
 
 func TestUnknownSubCommand(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "foobar")
 
 	resp := decodeSlackResponse(t, rec)
@@ -320,7 +329,7 @@ func TestUnknownSubCommand(t *testing.T) {
 
 func TestRunMissingSkillName(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "run")
 
 	resp := decodeSlackResponse(t, rec)
@@ -337,7 +346,7 @@ func TestRunMissingSkillName(t *testing.T) {
 
 func TestMethodNotAllowed(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/slack", nil)
 	rec := httptest.NewRecorder()
@@ -350,9 +359,9 @@ func TestMethodNotAllowed(t *testing.T) {
 
 func TestRunNoParams(t *testing.T) {
 	ms := newMockStore()
-	ms.skills["ping"] = &storage.Skill{Name: "ping"}
+	mc := &mockTaskCreator{taskID: "task-77", token: "tok-xyz"}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, "run ping")
 
 	if rec.Code != http.StatusOK {
@@ -363,11 +372,15 @@ func TestRunNoParams(t *testing.T) {
 	if resp.ResponseType != "in_channel" {
 		t.Errorf("expected in_channel, got %q", resp.ResponseType)
 	}
-	if len(ms.createdTasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(ms.createdTasks))
+
+	if mc.lastInput == nil {
+		t.Fatal("expected TaskCreator to be called")
 	}
-	if len(ms.createdTasks[0].Parameters) != 0 {
-		t.Errorf("expected empty params, got %v", ms.createdTasks[0].Parameters)
+	if mc.lastInput.SkillName != "ping" {
+		t.Errorf("expected skill ping, got %q", mc.lastInput.SkillName)
+	}
+	if len(mc.lastInput.Parameters) != 0 {
+		t.Errorf("expected empty params, got %v", mc.lastInput.Parameters)
 	}
 }
 
@@ -375,7 +388,7 @@ func TestStatusStoreError(t *testing.T) {
 	ms := newMockStore()
 	ms.listTasksErr = fmt.Errorf("db connection lost")
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 	rec := postSlashCommand(t, bot, "status")
 
 	resp := decodeSlackResponse(t, rec)
@@ -393,10 +406,9 @@ func TestStatusStoreError(t *testing.T) {
 
 func TestRunCreateTaskError(t *testing.T) {
 	ms := newMockStore()
-	ms.skills["deploy"] = &storage.Skill{Name: "deploy"}
-	ms.createTaskErr = fmt.Errorf("insert failed")
+	mc := &mockTaskCreator{createErr: fmt.Errorf("dispatch failed (task rolled back): insert failed")}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, `run deploy {}`)
 
 	resp := decodeSlackResponse(t, rec)
@@ -413,9 +425,9 @@ func TestRunCreateTaskError(t *testing.T) {
 
 func TestRunGetSkillError(t *testing.T) {
 	ms := newMockStore()
-	ms.getSkillErr = fmt.Errorf("timeout")
+	mc := &mockTaskCreator{createErr: fmt.Errorf("failed to lookup skill: timeout")}
 
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", mc)
 	rec := postSlashCommand(t, bot, `run deploy {}`)
 
 	resp := decodeSlackResponse(t, rec)
@@ -425,8 +437,23 @@ func TestRunGetSkillError(t *testing.T) {
 	if strings.Contains(resp.Text, "timeout") {
 		t.Errorf("raw error must not leak to user, got %q", resp.Text)
 	}
-	if !strings.Contains(resp.Text, "Failed to look up skill") {
-		t.Errorf("expected friendly lookup error, got %q", resp.Text)
+	if !strings.Contains(resp.Text, "Failed to submit task") {
+		t.Errorf("expected friendly submit error, got %q", resp.Text)
+	}
+}
+
+func TestRunNilCreatorReturnsError(t *testing.T) {
+	ms := newMockStore()
+	// creator is nil — task creation should gracefully refuse.
+	bot := NewBot(ms, "", nil)
+	rec := postSlashCommand(t, bot, "run deploy {}")
+
+	resp := decodeSlackResponse(t, rec)
+	if resp.ResponseType != "ephemeral" {
+		t.Errorf("expected ephemeral, got %q", resp.ResponseType)
+	}
+	if !strings.Contains(resp.Text, "not available") {
+		t.Errorf("expected not-available message, got %q", resp.Text)
 	}
 }
 
@@ -466,7 +493,7 @@ func signedSlashRequest(t *testing.T, secret, text string, timestamp time.Time) 
 
 func TestVerifySlackSignature_Valid(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, testSigningSecret)
+	bot := NewBot(ms, testSigningSecret, nil)
 
 	req := signedSlashRequest(t, testSigningSecret, "help", time.Now())
 	rec := httptest.NewRecorder()
@@ -483,7 +510,7 @@ func TestVerifySlackSignature_Valid(t *testing.T) {
 
 func TestVerifySlackSignature_Invalid(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, testSigningSecret)
+	bot := NewBot(ms, testSigningSecret, nil)
 
 	// Sign with wrong secret.
 	req := signedSlashRequest(t, "wrong-secret", "help", time.Now())
@@ -497,7 +524,7 @@ func TestVerifySlackSignature_Invalid(t *testing.T) {
 
 func TestVerifySlackSignature_MissingHeaders(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, testSigningSecret)
+	bot := NewBot(ms, testSigningSecret, nil)
 
 	// POST with no signature headers at all.
 	form := url.Values{}
@@ -515,7 +542,7 @@ func TestVerifySlackSignature_MissingHeaders(t *testing.T) {
 
 func TestVerifySlackSignature_Replay(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms, testSigningSecret)
+	bot := NewBot(ms, testSigningSecret, nil)
 
 	// Timestamp 10 minutes in the past — beyond 5 minute window.
 	staleTime := time.Now().Add(-10 * time.Minute)
@@ -531,7 +558,7 @@ func TestVerifySlackSignature_Replay(t *testing.T) {
 func TestVerifySlackSignature_DevModeSkipsVerification(t *testing.T) {
 	ms := newMockStore()
 	// Empty signing secret = dev mode.
-	bot := NewBot(ms, "")
+	bot := NewBot(ms, "", nil)
 
 	// No signature headers — should still work in dev mode.
 	form := url.Values{}

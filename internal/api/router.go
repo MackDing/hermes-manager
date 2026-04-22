@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MackDing/hermes-manager/internal/policy"
@@ -151,102 +152,37 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify skill exists
-	skill, err := s.store.GetSkill(r.Context(), req.SkillName)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to lookup skill: %v", err)
-		return
-	}
-	if skill == nil {
-		writeError(w, http.StatusBadRequest, "skill %q not found", req.SkillName)
-		return
-	}
-
-	// Policy check
-	if s.policy != nil {
-		pReq := policy.PolicyRequest{
-			User: req.User,
-			Team: req.Team,
-		}
-		if len(skill.RequiredModels) > 0 {
-			pReq.Model = skill.RequiredModels[0]
-		}
-		allowed, ruleID, err := s.policy.Evaluate(r.Context(), pReq)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "policy evaluation failed: %v", err)
-			return
-		}
-		if !allowed {
-			writeError(w, http.StatusForbidden, "blocked by policy rule: %s", ruleID)
-			return
-		}
-	}
-
-	// Build task
-	runtime := req.Runtime
-	if runtime == "" {
-		runtime = "local"
-	}
-	deadline := req.DeadlineSecs
-	if deadline <= 0 {
-		deadline = 300
-	}
-
-	taskID := generateID("task")
-	task := storage.Task{
-		ID:         taskID,
-		SkillName:  req.SkillName,
-		Parameters: req.Parameters,
-		PolicyContext: storage.PolicyContext{
-			User:         req.User,
-			Team:         req.Team,
-			ModelAllowed: skill.RequiredModels,
-		},
-		Runtime:      runtime,
-		State:        storage.TaskStatePending,
-		CreatedAt:    time.Now(),
-		DeadlineSecs: deadline,
-	}
-
-	if err := s.store.CreateTask(r.Context(), task); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create task: %v", err)
-		return
-	}
-
-	// Generate agent token
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to generate token: %v", err)
-		return
-	}
-	tokenStr := hex.EncodeToString(tokenBytes)
-	tokenHash := sha256.Sum256([]byte(tokenStr))
-
-	if err := s.store.StoreAgentToken(r.Context(), taskID, tokenHash[:]); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to store agent token: %v", err)
-		return
-	}
-
-	// Dispatch via scheduler
-	if s.scheduler != nil {
-		handle, err := s.scheduler.Dispatch(r.Context(), task, *skill)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to dispatch task: %v", err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"task_id":     taskID,
-			"runtime":     handle.RuntimeName,
-			"external_id": handle.ExternalID,
-			"token":       tokenStr,
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"task_id": taskID,
-		"token":   tokenStr,
+	result, err := s.CreateTask(r.Context(), CreateTaskRequest{
+		SkillName:    req.SkillName,
+		Parameters:   req.Parameters,
+		Runtime:      req.Runtime,
+		User:         req.User,
+		Team:         req.Team,
+		DeadlineSecs: req.DeadlineSecs,
 	})
+	if err != nil {
+		if pde, ok := IsPolicyDenied(err); ok {
+			writeError(w, http.StatusForbidden, "blocked by policy rule: %s", pde.RuleID)
+			return
+		}
+		// Distinguish "skill not found" (client error) from server errors.
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusBadRequest, "%v", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "%v", err)
+		return
+	}
+
+	resp := map[string]any{
+		"task_id": result.TaskID,
+		"token":   result.Token,
+	}
+	if result.ExternalID != "" {
+		resp["runtime"] = result.Runtime
+		resp["external_id"] = result.ExternalID
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {

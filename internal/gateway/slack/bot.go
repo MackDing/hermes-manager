@@ -1,6 +1,6 @@
 // Package slack implements a Slack bot gateway for HermesManager.
 // It handles incoming Slack slash commands via HTTP POST and translates
-// them into Store operations (task creation, status queries).
+// them into task creation via the shared pipeline (policy, token, dispatch).
 package slack
 
 import (
@@ -16,20 +16,46 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// TaskCreator abstracts the full task-creation pipeline so the Slack bot
+// goes through the same path as the HTTP API (policy, token, dispatch).
+type TaskCreator interface {
+	CreateTask(ctx context.Context, req TaskCreateInput) (*TaskCreateOutput, error)
+}
+
+// TaskCreateInput mirrors api.CreateTaskRequest without importing the api
+// package, keeping the dependency arrow from gateway/slack → api optional.
+// The wiring layer (main.go) bridges the two via an adapter or direct call.
+type TaskCreateInput struct {
+	SkillName  string
+	Parameters map[string]any
+	Runtime    string
+	User       string
+	Team       string
+}
+
+// TaskCreateOutput carries the result of a successful pipeline-based task creation.
+type TaskCreateOutput struct {
+	TaskID string
+	Token  string
+}
+
 // Bot is the Slack slash-command HTTP handler. It holds a reference to the
-// Store for querying skills and managing tasks, plus the Slack app's
-// signing secret used to authenticate inbound requests.
+// Store for querying skills and task status, and a TaskCreator for creating
+// tasks through the full pipeline (policy + token + dispatch).
 type Bot struct {
 	store         storage.Store
 	signingSecret string
+	creator       TaskCreator
 }
 
-// NewBot returns a Bot wired to the given Store. The signingSecret is the
-// Slack app's signing secret (Basic Information → App Credentials). Pass
-// "" only in dev: signature verification is skipped, and any caller can
-// invoke slash commands.
-func NewBot(store storage.Store, signingSecret string) *Bot {
-	return &Bot{store: store, signingSecret: signingSecret}
+// NewBot returns a Bot wired to the given Store and TaskCreator. The
+// signingSecret is the Slack app's signing secret (Basic Information → App
+// Credentials). Pass "" only in dev: signature verification is skipped, and
+// any caller can invoke slash commands. The creator handles the full task
+// pipeline (policy, token, dispatch); pass nil only if task creation via Slack
+// is not needed (status-only mode).
+func NewBot(store storage.Store, signingSecret string, creator TaskCreator) *Bot {
+	return &Bot{store: store, signingSecret: signingSecret, creator: creator}
 }
 
 // slackResponse is the JSON envelope Slack expects from slash-command handlers.
@@ -138,8 +164,8 @@ func (b *Bot) handleStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleRun parses "skill_name {json_params}" from the remaining command text,
-// validates the skill exists, and creates a task.
+// handleRun parses "skill_name {json_params}" from the remaining command text
+// and creates a task through the full pipeline (policy, token, dispatch).
 func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 	ctx := r.Context()
 
@@ -152,23 +178,10 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 		return
 	}
 
-	// Validate skill exists.
-	skill, err := b.store.GetSkill(ctx, skillName)
-	if err != nil {
-		log.Error().Err(err).Str("skill", skillName).Msg("slack: failed to look up skill")
+	if b.creator == nil {
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
-			Text:         "Failed to look up skill (runtime error). Check the hermesmanager logs or contact an admin.",
-		})
-		return
-	}
-	if skill == nil {
-		respondJSON(w, slackResponse{
-			ResponseType: "ephemeral",
-			Text: fmt.Sprintf(
-				"Skill `%s` not found. Try `/hermes status` for context, or ask an admin to add the skill via Helm values.",
-				skillName,
-			),
+			Text:         "Task creation is not available. The server may be running in status-only mode.",
 		})
 		return
 	}
@@ -186,19 +199,15 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 		}
 	}
 
-	now := time.Now().UTC()
-	task := storage.Task{
-		ID:         generateID(now),
+	result, err := b.creator.CreateTask(ctx, TaskCreateInput{
 		SkillName:  skillName,
 		Parameters: params,
 		Runtime:    "local",
-		State:      storage.TaskStatePending,
-		CreatedAt:  now,
-		UpdatedAt:  now,
-	}
-
-	if err := b.store.CreateTask(ctx, task); err != nil {
-		log.Error().Err(err).Str("skill", skillName).Str("task_id", task.ID).Msg("slack: failed to create task")
+		User:       "slack-user",
+	})
+	if err != nil {
+		log.Error().Err(err).Str("skill", skillName).Msg("slack: task creation failed")
+		// Don't leak internal error details to Slack users.
 		respondJSON(w, slackResponse{
 			ResponseType: "ephemeral",
 			Text:         "Failed to submit task (runtime error). Check the hermesmanager logs or contact an admin.",
@@ -208,7 +217,7 @@ func (b *Bot) handleRun(w http.ResponseWriter, r *http.Request, args string) {
 
 	respondJSON(w, slackResponse{
 		ResponseType: "in_channel",
-		Text:         fmt.Sprintf("Task %s created for skill %q", task.ID, skillName),
+		Text:         fmt.Sprintf("Task %s created for skill %q", result.TaskID, skillName),
 	})
 }
 
@@ -244,9 +253,8 @@ func GenerateIDForTest(t time.Time) string {
 
 // StoreSubset documents which Store methods Bot actually uses. It is not
 // referenced at runtime (Bot takes the full Store interface) but guides
-// test-mock construction.
+// test-mock construction. Task creation goes through the TaskCreator
+// interface, not through the Store directly.
 type StoreSubset interface {
 	ListTasks(ctx context.Context, filter storage.TaskFilter) ([]storage.Task, error)
-	GetSkill(ctx context.Context, name string) (*storage.Skill, error)
-	CreateTask(ctx context.Context, t storage.Task) error
 }
