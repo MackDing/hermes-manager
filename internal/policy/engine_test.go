@@ -286,6 +286,106 @@ rules:
 	}
 }
 
+func TestAllowBeforeDenyShortCircuits(t *testing.T) {
+	yaml := `
+rules:
+  - id: allow-admin
+    action: allow
+    conditions:
+      user: admin
+  - id: deny-gpt4
+    action: deny
+    conditions:
+      model: gpt-4
+`
+	path := writeTempPolicy(t, yaml)
+	eng, err := NewEngine(path)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	// Admin user requesting gpt-4: allow rule matches first, deny rule never reached.
+	allowed, ruleID, err := eng.Evaluate(context.Background(), PolicyRequest{
+		Model: "gpt-4",
+		User:  "admin",
+	})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected allow (admin exemption), denied by %s", ruleID)
+	}
+
+	// Non-admin user requesting gpt-4: allow rule does not match, deny rule matches.
+	allowed, ruleID, err = eng.Evaluate(context.Background(), PolicyRequest{
+		Model: "gpt-4",
+		User:  "bob",
+	})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if allowed {
+		t.Fatal("expected deny for non-admin gpt-4 request")
+	}
+	if ruleID != "deny-gpt4" {
+		t.Fatalf("expected deny-gpt4, got %s", ruleID)
+	}
+}
+
+func TestDenyBeforeAllowWins(t *testing.T) {
+	yaml := `
+rules:
+  - id: deny-free
+    action: deny
+    conditions:
+      team: free-tier
+  - id: allow-gpt4
+    action: allow
+    conditions:
+      model: gpt-4
+`
+	path := writeTempPolicy(t, yaml)
+	eng, err := NewEngine(path)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	// free-tier requesting gpt-4: deny rule matches first (first-match-wins).
+	allowed, ruleID, err := eng.Evaluate(context.Background(), PolicyRequest{
+		Model: "gpt-4",
+		Team:  "free-tier",
+	})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if allowed {
+		t.Fatal("expected deny (deny rule ordered before allow)")
+	}
+	if ruleID != "deny-free" {
+		t.Fatalf("expected deny-free, got %s", ruleID)
+	}
+}
+
+func TestUnknownActionReturnsError(t *testing.T) {
+	yaml := `
+rules:
+  - id: bad-action
+    action: quarantine
+    conditions:
+      model: gpt-4
+`
+	path := writeTempPolicy(t, yaml)
+	eng, err := NewEngine(path)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	_, _, err = eng.Evaluate(context.Background(), PolicyRequest{Model: "gpt-4"})
+	if err == nil {
+		t.Fatal("expected error for unknown action")
+	}
+}
+
 func TestUnknownConditionKeyDoesNotMatch(t *testing.T) {
 	yaml := `
 rules:

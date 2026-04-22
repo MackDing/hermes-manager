@@ -14,6 +14,7 @@ import (
 	"github.com/MackDing/hermes-manager/internal/scheduler"
 	"github.com/MackDing/hermes-manager/internal/storage"
 	"github.com/MackDing/hermes-manager/web"
+	"github.com/rs/zerolog/log"
 )
 
 // Server holds dependencies for all API handlers.
@@ -72,12 +73,23 @@ func (s *Server) Handler() http.Handler {
 	// SPA — serves the embedded React app for all non-API routes
 	mountSPA(mux)
 
-	return wrapMiddleware(mux)
+	return authMiddleware(wrapMiddleware(mux))
 }
 
-// wrapMiddleware applies RequestID + Logging middleware to any handler.
+// wrapMiddleware applies body-limit, RequestID, and Logging middleware to any handler.
 func wrapMiddleware(h http.Handler) http.Handler {
-	return RequestIDMiddleware(LoggingMiddleware(h))
+	return RequestIDMiddleware(LoggingMiddleware(limitBody(h)))
+}
+
+const maxBodySize = 1 << 20 // 1 MB
+
+// limitBody caps the request body to maxBodySize to prevent denial-of-service
+// from unbounded payloads.
+func limitBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // mountSPA adds the embedded React SPA as a catch-all for non-API GET requests.
@@ -87,7 +99,6 @@ func mountSPA(mux *http.ServeMux) {
 		spaHandler.ServeHTTP(w, r)
 	})
 }
-
 
 // --- Skills ---
 
@@ -120,12 +131,12 @@ func (s *Server) handleGetSkill(w http.ResponseWriter, r *http.Request) {
 // --- Tasks ---
 
 type createTaskRequest struct {
-	SkillName    string            `json:"skill_name"`
-	Parameters   map[string]any    `json:"parameters"`
-	Runtime      string            `json:"runtime"`
-	User         string            `json:"user"`
-	Team         string            `json:"team"`
-	DeadlineSecs int               `json:"deadline_seconds"`
+	SkillName    string         `json:"skill_name"`
+	Parameters   map[string]any `json:"parameters"`
+	Runtime      string         `json:"runtime"`
+	User         string         `json:"user"`
+	Team         string         `json:"team"`
+	DeadlineSecs int            `json:"deadline_seconds"`
 }
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -183,9 +194,9 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	taskID := generateID("task")
 	task := storage.Task{
-		ID:           taskID,
-		SkillName:    req.SkillName,
-		Parameters:   req.Parameters,
+		ID:         taskID,
+		SkillName:  req.SkillName,
+		Parameters: req.Parameters,
 		PolicyContext: storage.PolicyContext{
 			User:         req.User,
 			Team:         req.Team,
@@ -224,10 +235,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{
-			"task_id":    taskID,
-			"runtime":    handle.RuntimeName,
+			"task_id":     taskID,
+			"runtime":     handle.RuntimeName,
 			"external_id": handle.ExternalID,
-			"token":      tokenStr,
+			"token":       tokenStr,
 		})
 		return
 	}
@@ -256,6 +267,11 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			filter.Offset = n
 		}
+	}
+
+	const maxPageSize = 100
+	if filter.Limit > maxPageSize {
+		filter.Limit = maxPageSize
 	}
 
 	tasks, err := s.store.ListTasks(r.Context(), filter)
@@ -345,16 +361,38 @@ func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 	// If terminal event, update task state and revoke token
 	switch storage.EventType(req.Type) {
 	case storage.EventTaskCompleted:
-		_ = s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateCompleted)
-		_ = s.store.RevokeAgentToken(r.Context(), req.TaskID)
+		if err := s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateCompleted); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to update task state on terminal event")
+			writeError(w, http.StatusInternalServerError, "failed to finalize task state")
+			return
+		}
+		if err := s.store.RevokeAgentToken(r.Context(), req.TaskID); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to revoke agent token")
+		}
 	case storage.EventTaskFailed:
-		_ = s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateFailed)
-		_ = s.store.RevokeAgentToken(r.Context(), req.TaskID)
+		if err := s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateFailed); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to update task state on terminal event")
+			writeError(w, http.StatusInternalServerError, "failed to finalize task state")
+			return
+		}
+		if err := s.store.RevokeAgentToken(r.Context(), req.TaskID); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to revoke agent token")
+		}
 	case storage.EventTaskTimeout:
-		_ = s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateTimeout)
-		_ = s.store.RevokeAgentToken(r.Context(), req.TaskID)
+		if err := s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateTimeout); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to update task state on terminal event")
+			writeError(w, http.StatusInternalServerError, "failed to finalize task state")
+			return
+		}
+		if err := s.store.RevokeAgentToken(r.Context(), req.TaskID); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to revoke agent token")
+		}
 	case storage.EventTaskStarted:
-		_ = s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateRunning)
+		if err := s.store.UpdateTaskState(r.Context(), req.TaskID, storage.TaskStateRunning); err != nil {
+			log.Error().Err(err).Str("task_id", req.TaskID).Msg("failed to update task state on started event")
+			writeError(w, http.StatusInternalServerError, "failed to update task state")
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]string{"id": eventID})
@@ -362,7 +400,7 @@ func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	filter := storage.EventFilter{
-		Limit:  500,
+		Limit:  50,
 		Offset: 0,
 	}
 	if v := r.URL.Query().Get("task_id"); v != "" {
@@ -381,6 +419,16 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			filter.Limit = n
 		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			filter.Offset = n
+		}
+	}
+
+	const maxPageSize = 100
+	if filter.Limit > maxPageSize {
+		filter.Limit = maxPageSize
 	}
 
 	events, err := s.store.ListEvents(r.Context(), filter)

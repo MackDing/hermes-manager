@@ -49,6 +49,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "hermesmanager.fullname" . }}
                   key: admin-password
+            - name: HERMESMANAGER_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hermesmanager.fullname" . }}
+                  key: admin-password
             {{- if .Values.postgres.enabled }}
             - name: DATABASE_URL
               valueFrom:

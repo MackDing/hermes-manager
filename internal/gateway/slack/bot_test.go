@@ -2,11 +2,15 @@ package slack
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -143,7 +147,7 @@ func TestStatusReturnsTaskCounts(t *testing.T) {
 		{ID: "t7", State: storage.TaskStateFailed},
 	}
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "status")
 
 	if rec.Code != http.StatusOK {
@@ -178,7 +182,7 @@ func TestRunCreatesTask(t *testing.T) {
 		Version: "1.0",
 	}
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, `run deploy {"env":"staging"}`)
 
 	if rec.Code != http.StatusOK {
@@ -214,7 +218,7 @@ func TestRunInvalidSkillReturnsError(t *testing.T) {
 	ms := newMockStore()
 	// No skills registered — any skill name is invalid.
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "run nonexistent {}")
 
 	if rec.Code != http.StatusOK {
@@ -237,7 +241,7 @@ func TestRunMalformedParamsReturnsError(t *testing.T) {
 	ms := newMockStore()
 	ms.skills["deploy"] = &storage.Skill{Name: "deploy"}
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "run deploy {not-valid-json}")
 
 	if rec.Code != http.StatusOK {
@@ -258,7 +262,7 @@ func TestRunMalformedParamsReturnsError(t *testing.T) {
 
 func TestBotHelp(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "help")
 
 	if rec.Code != http.StatusOK {
@@ -282,7 +286,7 @@ func TestBotHelp(t *testing.T) {
 func TestBotHelpBareCommand(t *testing.T) {
 	// An empty "text" (user types `/hermes` alone) should route to help.
 	ms := newMockStore()
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "")
 
 	resp := decodeSlackResponse(t, rec)
@@ -296,7 +300,7 @@ func TestBotHelpBareCommand(t *testing.T) {
 
 func TestUnknownSubCommand(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "foobar")
 
 	resp := decodeSlackResponse(t, rec)
@@ -316,7 +320,7 @@ func TestUnknownSubCommand(t *testing.T) {
 
 func TestRunMissingSkillName(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "run")
 
 	resp := decodeSlackResponse(t, rec)
@@ -333,7 +337,7 @@ func TestRunMissingSkillName(t *testing.T) {
 
 func TestMethodNotAllowed(t *testing.T) {
 	ms := newMockStore()
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 
 	req := httptest.NewRequest(http.MethodGet, "/slack", nil)
 	rec := httptest.NewRecorder()
@@ -348,7 +352,7 @@ func TestRunNoParams(t *testing.T) {
 	ms := newMockStore()
 	ms.skills["ping"] = &storage.Skill{Name: "ping"}
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "run ping")
 
 	if rec.Code != http.StatusOK {
@@ -371,7 +375,7 @@ func TestStatusStoreError(t *testing.T) {
 	ms := newMockStore()
 	ms.listTasksErr = fmt.Errorf("db connection lost")
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, "status")
 
 	resp := decodeSlackResponse(t, rec)
@@ -392,7 +396,7 @@ func TestRunCreateTaskError(t *testing.T) {
 	ms.skills["deploy"] = &storage.Skill{Name: "deploy"}
 	ms.createTaskErr = fmt.Errorf("insert failed")
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, `run deploy {}`)
 
 	resp := decodeSlackResponse(t, rec)
@@ -411,7 +415,7 @@ func TestRunGetSkillError(t *testing.T) {
 	ms := newMockStore()
 	ms.getSkillErr = fmt.Errorf("timeout")
 
-	bot := NewBot(ms)
+	bot := NewBot(ms, "")
 	rec := postSlashCommand(t, bot, `run deploy {}`)
 
 	resp := decodeSlackResponse(t, rec)
@@ -431,5 +435,114 @@ func TestGenerateID(t *testing.T) {
 	id := GenerateIDForTest(ts)
 	if !strings.HasPrefix(id, "task-") {
 		t.Errorf("expected task- prefix, got %q", id)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Slack signature verification tests
+// ---------------------------------------------------------------------------
+
+const testSigningSecret = "test-signing-secret-abc123"
+
+// signedSlashRequest builds an httptest request signed with the given secret.
+func signedSlashRequest(t *testing.T, secret, text string, timestamp time.Time) *http.Request {
+	t.Helper()
+	form := url.Values{}
+	form.Set("text", text)
+	body := form.Encode()
+
+	ts := strconv.FormatInt(timestamp.Unix(), 10)
+	baseString := fmt.Sprintf("%s:%s:%s", slackSignatureVersion, ts, body)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(baseString))
+	sig := slackSignatureVersion + "=" + hex.EncodeToString(mac.Sum(nil))
+
+	req := httptest.NewRequest(http.MethodPost, "/slack", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Slack-Request-Timestamp", ts)
+	req.Header.Set("X-Slack-Signature", sig)
+	return req
+}
+
+func TestVerifySlackSignature_Valid(t *testing.T) {
+	ms := newMockStore()
+	bot := NewBot(ms, testSigningSecret)
+
+	req := signedSlashRequest(t, testSigningSecret, "help", time.Now())
+	rec := httptest.NewRecorder()
+	bot.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with valid signature, got %d: %s", rec.Code, rec.Body.String())
+	}
+	resp := decodeSlackResponse(t, rec)
+	if !strings.Contains(resp.Text, "HermesManager Slack Commands") {
+		t.Errorf("expected help output, got %q", resp.Text)
+	}
+}
+
+func TestVerifySlackSignature_Invalid(t *testing.T) {
+	ms := newMockStore()
+	bot := NewBot(ms, testSigningSecret)
+
+	// Sign with wrong secret.
+	req := signedSlashRequest(t, "wrong-secret", "help", time.Now())
+	rec := httptest.NewRecorder()
+	bot.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with invalid signature, got %d", rec.Code)
+	}
+}
+
+func TestVerifySlackSignature_MissingHeaders(t *testing.T) {
+	ms := newMockStore()
+	bot := NewBot(ms, testSigningSecret)
+
+	// POST with no signature headers at all.
+	form := url.Values{}
+	form.Set("text", "help")
+	req := httptest.NewRequest(http.MethodPost, "/slack", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rec := httptest.NewRecorder()
+	bot.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with missing headers, got %d", rec.Code)
+	}
+}
+
+func TestVerifySlackSignature_Replay(t *testing.T) {
+	ms := newMockStore()
+	bot := NewBot(ms, testSigningSecret)
+
+	// Timestamp 10 minutes in the past — beyond 5 minute window.
+	staleTime := time.Now().Add(-10 * time.Minute)
+	req := signedSlashRequest(t, testSigningSecret, "help", staleTime)
+	rec := httptest.NewRecorder()
+	bot.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for stale timestamp, got %d", rec.Code)
+	}
+}
+
+func TestVerifySlackSignature_DevModeSkipsVerification(t *testing.T) {
+	ms := newMockStore()
+	// Empty signing secret = dev mode.
+	bot := NewBot(ms, "")
+
+	// No signature headers — should still work in dev mode.
+	form := url.Values{}
+	form.Set("text", "help")
+	req := httptest.NewRequest(http.MethodPost, "/slack", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rec := httptest.NewRecorder()
+	bot.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 in dev mode, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

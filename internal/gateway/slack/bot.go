@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -16,14 +17,19 @@ import (
 )
 
 // Bot is the Slack slash-command HTTP handler. It holds a reference to the
-// Store for querying skills and managing tasks.
+// Store for querying skills and managing tasks, plus the Slack app's
+// signing secret used to authenticate inbound requests.
 type Bot struct {
-	store storage.Store
+	store         storage.Store
+	signingSecret string
 }
 
-// NewBot returns a Bot wired to the given Store.
-func NewBot(store storage.Store) *Bot {
-	return &Bot{store: store}
+// NewBot returns a Bot wired to the given Store. The signingSecret is the
+// Slack app's signing secret (Basic Information → App Credentials). Pass
+// "" only in dev: signature verification is skipped, and any caller can
+// invoke slash commands.
+func NewBot(store storage.Store, signingSecret string) *Bot {
+	return &Bot{store: store, signingSecret: signingSecret}
 }
 
 // slackResponse is the JSON envelope Slack expects from slash-command handlers.
@@ -46,7 +52,20 @@ func (b *Bot) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	text := strings.TrimSpace(r.FormValue("text"))
+	// Verify the request came from Slack (HMAC-SHA256 signature check).
+	// This consumes r.Body, so we parse form values from the returned bytes.
+	body := verifySlackRequest(w, r, b.signingSecret)
+	if body == nil {
+		return // verifySlackRequest already wrote the HTTP error
+	}
+
+	form, err := url.ParseQuery(string(body))
+	if err != nil {
+		http.Error(w, "malformed form body", http.StatusBadRequest)
+		return
+	}
+
+	text := strings.TrimSpace(form.Get("text"))
 	subCmd, rest := splitFirst(text)
 
 	switch strings.ToLower(subCmd) {
@@ -85,7 +104,7 @@ func (b *Bot) handleHelp(w http.ResponseWriter, _ *http.Request) {
 func (b *Bot) handleStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tasks, err := b.store.ListTasks(ctx, storage.TaskFilter{Limit: 10000})
+	tasks, err := b.store.ListTasks(ctx, storage.TaskFilter{Limit: 1000})
 	if err != nil {
 		log.Error().Err(err).Msg("slack: failed to list tasks for status command")
 		respondJSON(w, slackResponse{

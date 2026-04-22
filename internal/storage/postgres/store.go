@@ -9,7 +9,6 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,13 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/MackDing/hermes-manager/internal/storage"
+	"github.com/MackDing/hermes-manager/internal/storage/migrations"
 )
-
-// MigrationSQL contains the 001_init.up.sql content.
-// We read it at startup from disk or embed it from the migrations package.
-// For v0.1, migrations are applied via the SQL string directly.
-
-const initMigrationSQL = "" // Loaded at runtime from migrations dir; see Migrate()
 
 // Store implements storage.Store backed by PostgreSQL.
 type Store struct {
@@ -73,16 +67,10 @@ func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
 }
 
-// Migrate runs migration SQL from the given directory.
+// Migrate runs embedded migration SQL.
 // For v0.1, only 001_init.up.sql is expected.
 func (s *Store) Migrate(ctx context.Context) error {
-	// Find migrations dir relative to binary or from env
-	migrationsDir := os.Getenv("HERMESMANAGER_MIGRATIONS_DIR")
-	if migrationsDir == "" {
-		migrationsDir = "internal/storage/migrations"
-	}
-
-	upSQL, err := os.ReadFile(filepath.Join(migrationsDir, "001_init.up.sql"))
+	upSQL, err := migrations.FS.ReadFile("001_init.up.sql")
 	if err != nil {
 		return fmt.Errorf("postgres: read migration: %w", err)
 	}

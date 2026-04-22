@@ -62,17 +62,26 @@ func (e *Engine) Reload() error {
 	return e.LoadFromFile(path)
 }
 
-// Evaluate checks the request against all loaded rules.
-// If any deny rule matches, the request is denied and the matching rule's ID is returned.
-// If no deny rule matches, the request is allowed.
+// Evaluate checks the request against all loaded rules using first-match-wins semantics.
+// Rules are evaluated in order; the first rule whose conditions match determines the outcome.
+// If the matching rule's action is "deny", the request is denied and the rule's ID is returned.
+// If the matching rule's action is "allow", the request is explicitly allowed.
+// If no rule matches, the request is allowed (default-allow).
 func (e *Engine) Evaluate(_ context.Context, req PolicyRequest) (allowed bool, deniedByRuleID string, err error) {
 	e.mu.RLock()
 	rules := e.rules
 	e.mu.RUnlock()
 
 	for i := range rules {
-		if rules[i].Action == "deny" && e.matchRule(rules[i], req) {
-			return false, rules[i].ID, nil
+		if e.matchRule(rules[i], req) {
+			switch rules[i].Action {
+			case "deny":
+				return false, rules[i].ID, nil
+			case "allow":
+				return true, "", nil
+			default:
+				return false, rules[i].ID, fmt.Errorf("policy: unknown action %q in rule %s", rules[i].Action, rules[i].ID)
+			}
 		}
 	}
 

@@ -151,6 +151,13 @@ Environment variables:
 
   LOG_LEVEL                 trace|debug|info|warn|error (default: info)
 
+  HERMESMANAGER_API_TOKEN   Bearer token for API auth (optional in dev, required in prod)
+                            Helm chart auto-injects from the admin-password Secret.
+
+  SLACK_SIGNING_SECRET      Slack app signing secret for verifying inbound slash commands
+                            (Basic Information → App Credentials in the Slack dashboard).
+                            If empty, signature verification is skipped (dev mode only).
+
 Docs:     https://github.com/MackDing/hermes-manager
 Quickstart: https://github.com/MackDing/hermes-manager/blob/main/docs/QUICKSTART.md
 `, version)
